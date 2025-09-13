@@ -183,12 +183,17 @@
             left: 50%;
             transform: translate(-50%, -50%);
             background: rgba(255, 255, 255, 0.98);
-            padding: 40px;
+            padding: 30px;
             border-radius: 20px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
             text-align: center;
             display: none;
             z-index: 1000;
+            width: 300px;
+            height: 300px;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
 
         .win-message h2 {
@@ -282,6 +287,22 @@
             
             h1 {
                 font-size: 1.8em;
+            }
+            
+            .win-message {
+                width: 280px;
+                height: 280px;
+                padding: 25px;
+            }
+            
+            .win-message h2 {
+                font-size: 1.8em;
+                margin-bottom: 15px;
+            }
+            
+            .win-message p {
+                font-size: 14px;
+                margin-bottom: 15px;
             }
         }
     </style>
