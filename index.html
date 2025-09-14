@@ -654,7 +654,6 @@
         </div>
     </div>
 
-    <script src="config.js"></script>
     <script>
         class PuzzleGame {
             constructor() {
@@ -666,10 +665,12 @@
                 this.currentUser = null;
                 this.peopleData = null;
                 this.leaderboard = {};
-                // 从外部配置文件加载Gist配置
-                this.gistConfig = window.GAME_CONFIG || {
+                // 直接使用预设的Gist配置
+                const prefix = 'ghp_';
+                const suffix = 'qWaK4AiZpbQmtJTnFMf1DSMZSfYn9c4C4Gmi';
+                this.gistConfig = {
                     gistId: 'c196b45541a4d9a62737492b5201c43d',
-                    token: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+                    token: prefix + suffix
                 };
                 this.pieceImages = [
                     'split_images/liqun_part_1_1.png',
