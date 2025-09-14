@@ -580,7 +580,7 @@
                 this.isLoggedIn = false;
                 this.currentUser = null;
                 this.peopleData = null;
-                this.leaderboard = {};
+                this.leaderboard = this.loadLeaderboard();
                 this.pieceImages = [
                     'split_images/liqun_part_1_1.png',
                     'split_images/liqun_part_1_2.png',
@@ -600,8 +600,6 @@
                 try {
                     const response = await fetch('people.json');
                     this.peopleData = await response.json();
-                    // 同时加载排行榜数据
-                    this.leaderboard = await this.loadLeaderboard();
                     this.init();
                 } catch (error) {
                     console.error('加载人员数据失败:', error);
@@ -611,7 +609,6 @@
                         {"工号": "2", "姓名": "李四"},
                         {"工号": "3", "姓名": "王五"}
                     ];
-                    this.leaderboard = await this.loadLeaderboard();
                     this.init();
                 }
             }
@@ -875,35 +872,13 @@
                 document.getElementById('employeeName').value = '';
             }
 
-            async loadLeaderboard() {
-                try {
-                    const response = await fetch('leaderboard.json');
-                    if (response.ok) {
-                        const data = await response.json();
-                        return data;
-                    }
-                } catch (error) {
-                    console.error('加载排行榜数据失败:', error);
-                }
-                return {};
+            loadLeaderboard() {
+                const saved = localStorage.getItem('puzzleLeaderboard');
+                return saved ? JSON.parse(saved) : {};
             }
 
-            async saveLeaderboard() {
-                try {
-                    // 使用PUT方法直接更新leaderboard.json文件
-                    const response = await fetch('leaderboard.json', {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(this.leaderboard)
-                    });
-                    if (!response.ok) {
-                        console.error('保存排行榜数据失败');
-                    }
-                } catch (error) {
-                    console.error('保存排行榜数据失败:', error);
-                }
+            saveLeaderboard() {
+                localStorage.setItem('puzzleLeaderboard', JSON.stringify(this.leaderboard));
             }
 
             updateLeaderboard() {

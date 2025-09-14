@@ -565,6 +565,7 @@
                 <!-- 排行榜内容将通过JavaScript动态生成 -->
             </div>
             <div class="leaderboard-buttons">
+                <button onclick="game.exportLeaderboardData()">导出数据</button>
                 <button onclick="closeLeaderboard()">关闭</button>
             </div>
         </div>
@@ -593,6 +594,11 @@
                     'split_images/liqun_part_3_3.png'
                 ];
                 this.correctOrder = [0, 1, null, 3, 4, 5, 6, 7, 8];
+                this.initializeGame();
+            }
+
+            async initializeGame() {
+                await this.loadLeaderboard();
                 this.loadPeopleData();
             }
 
@@ -600,8 +606,6 @@
                 try {
                     const response = await fetch('people.json');
                     this.peopleData = await response.json();
-                    // 同时加载排行榜数据
-                    this.leaderboard = await this.loadLeaderboard();
                     this.init();
                 } catch (error) {
                     console.error('加载人员数据失败:', error);
@@ -611,7 +615,6 @@
                         {"工号": "2", "姓名": "李四"},
                         {"工号": "3", "姓名": "王五"}
                     ];
-                    this.leaderboard = await this.loadLeaderboard();
                     this.init();
                 }
             }
@@ -877,32 +880,58 @@
 
             async loadLeaderboard() {
                 try {
+                    // 首先尝试从远程加载
                     const response = await fetch('leaderboard.json');
                     if (response.ok) {
-                        const data = await response.json();
-                        return data;
+                        const remoteData = await response.json();
+                        // 合并本地和远程数据，保留更好的成绩
+                        const localData = this.loadLocalLeaderboard();
+                        this.leaderboard = this.mergeLeaderboardData(localData, remoteData);
+                        // 保存合并后的数据到本地
+                        this.saveLocalLeaderboard();
+                        return this.leaderboard;
                     }
                 } catch (error) {
-                    console.error('加载排行榜数据失败:', error);
+                    console.log('无法加载远程排行榜，使用本地数据:', error);
                 }
-                return {};
+                
+                // 如果远程加载失败，使用本地数据
+                return this.loadLocalLeaderboard();
+            }
+
+            loadLocalLeaderboard() {
+                const saved = localStorage.getItem('puzzleLeaderboard');
+                return saved ? JSON.parse(saved) : {};
+            }
+
+            saveLocalLeaderboard() {
+                localStorage.setItem('puzzleLeaderboard', JSON.stringify(this.leaderboard));
+            }
+
+            mergeLeaderboardData(localData, remoteData) {
+                const merged = { ...remoteData };
+                
+                // 合并本地数据，保留更好的成绩
+                Object.entries(localData).forEach(([userId, data]) => {
+                    if (!merged[userId] || data.score < merged[userId].score) {
+                        merged[userId] = data;
+                    }
+                });
+                
+                return merged;
             }
 
             async saveLeaderboard() {
+                // 保存到本地
+                this.saveLocalLeaderboard();
+                
+                // 尝试保存到远程（这里只是模拟，实际需要服务器支持）
                 try {
-                    // 使用PUT方法直接更新leaderboard.json文件
-                    const response = await fetch('leaderboard.json', {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(this.leaderboard)
-                    });
-                    if (!response.ok) {
-                        console.error('保存排行榜数据失败');
-                    }
+                    // 注意：由于GitHub Pages是静态托管，无法直接写入文件
+                    // 这里我们只能保存到本地，用户需要手动同步
+                    console.log('排行榜数据已保存到本地，如需跨设备同步，请手动更新leaderboard.json文件');
                 } catch (error) {
-                    console.error('保存排行榜数据失败:', error);
+                    console.log('远程保存失败，数据已保存到本地:', error);
                 }
             }
 
@@ -927,6 +956,17 @@
                 document.getElementById('overlay').style.display = 'block';
                 document.getElementById('leaderboardModal').style.display = 'block';
                 this.renderLeaderboard();
+            }
+
+            exportLeaderboardData() {
+                const dataStr = JSON.stringify(this.leaderboard, null, 2);
+                const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'leaderboard.json';
+                link.click();
+                URL.revokeObjectURL(url);
             }
 
             closeLeaderboard() {
