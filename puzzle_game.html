@@ -305,6 +305,107 @@
             display: none;
         }
 
+        .leaderboard-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.98);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            display: none;
+            z-index: 1001;
+            width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .leaderboard-content h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        .leaderboard-list {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .leaderboard-item.current-user {
+            background: #e8f5e8;
+            border-left-color: #4CAF50;
+        }
+
+        .leaderboard-item.rank-1 {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            border-left-color: #ffd700;
+        }
+
+        .leaderboard-item.rank-2 {
+            background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
+            border-left-color: #c0c0c0;
+        }
+
+        .leaderboard-item.rank-3 {
+            background: linear-gradient(135deg, #cd7f32, #daa520);
+            border-left-color: #cd7f32;
+        }
+
+        .leaderboard-rank {
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+            min-width: 30px;
+        }
+
+        .leaderboard-user {
+            flex: 1;
+            margin-left: 15px;
+            color: #333;
+        }
+
+        .leaderboard-score {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .leaderboard-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .leaderboard-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .leaderboard-buttons button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
         @media (max-width: 768px) {
             .game-content {
                 flex-direction: column;
@@ -402,6 +503,7 @@
         
         <div class="controls">
             <button onclick="shufflePuzzle()">🔀 打乱</button>
+            <button onclick="showLeaderboard()">🏆 排行榜</button>
             <button onclick="showLoginModal()" id="loginBtn">🔐 登录</button>
         </div>
         
@@ -455,6 +557,19 @@
         </div>
     </div>
 
+    <!-- 排行榜弹窗 -->
+    <div class="leaderboard-modal" id="leaderboardModal">
+        <div class="leaderboard-content">
+            <h2>🏆 排行榜</h2>
+            <div class="leaderboard-list" id="leaderboardList">
+                <!-- 排行榜内容将通过JavaScript动态生成 -->
+            </div>
+            <div class="leaderboard-buttons">
+                <button onclick="closeLeaderboard()">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         class PuzzleGame {
             constructor() {
@@ -465,6 +580,7 @@
                 this.isLoggedIn = false;
                 this.currentUser = null;
                 this.peopleData = null;
+                this.leaderboard = this.loadLeaderboard();
                 this.pieceImages = [
                     'split_images/liqun_part_1_1.png',
                     'split_images/liqun_part_1_2.png',
@@ -690,6 +806,8 @@
                 
                 if (isCorrect) {
                     this.isGameWon = true;
+                    // 更新排行榜
+                    this.updateLeaderboard();
                     // 停顿两秒后再显示成功提醒
                     setTimeout(() => {
                         this.showWinMessage();
@@ -753,6 +871,71 @@
                 document.getElementById('employeeId').value = '';
                 document.getElementById('employeeName').value = '';
             }
+
+            loadLeaderboard() {
+                const saved = localStorage.getItem('puzzleLeaderboard');
+                return saved ? JSON.parse(saved) : {};
+            }
+
+            saveLeaderboard() {
+                localStorage.setItem('puzzleLeaderboard', JSON.stringify(this.leaderboard));
+            }
+
+            updateLeaderboard() {
+                if (!this.isLoggedIn || !this.currentUser) return;
+                
+                const userId = this.currentUser.工号;
+                const currentBest = this.leaderboard[userId];
+                
+                // 如果没有记录或者当前成绩更好，则更新
+                if (!currentBest || this.moveCount < currentBest.score) {
+                    this.leaderboard[userId] = {
+                        name: this.currentUser.姓名,
+                        score: this.moveCount,
+                        timestamp: new Date().toISOString()
+                    };
+                    this.saveLeaderboard();
+                }
+            }
+
+            showLeaderboard() {
+                document.getElementById('overlay').style.display = 'block';
+                document.getElementById('leaderboardModal').style.display = 'block';
+                this.renderLeaderboard();
+            }
+
+            closeLeaderboard() {
+                document.getElementById('overlay').style.display = 'none';
+                document.getElementById('leaderboardModal').style.display = 'none';
+            }
+
+            renderLeaderboard() {
+                const leaderboardList = document.getElementById('leaderboardList');
+                const entries = Object.entries(this.leaderboard);
+                
+                if (entries.length === 0) {
+                    leaderboardList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">暂无排行榜数据</p>';
+                    return;
+                }
+                
+                // 按成绩排序（移动次数越少越好）
+                entries.sort((a, b) => a[1].score - b[1].score);
+                
+                leaderboardList.innerHTML = entries.map(([userId, data], index) => {
+                    const rank = index + 1;
+                    const isCurrentUser = this.isLoggedIn && this.currentUser && this.currentUser.工号 === userId;
+                    const rankClass = rank <= 3 ? `rank-${rank}` : '';
+                    const userClass = isCurrentUser ? 'current-user' : '';
+                    
+                    return `
+                        <div class="leaderboard-item ${rankClass} ${userClass}">
+                            <div class="leaderboard-rank">${rank}</div>
+                            <div class="leaderboard-user">${data.name} (${userId})</div>
+                            <div class="leaderboard-score">${data.score}步</div>
+                        </div>
+                    `;
+                }).join('');
+            }
         }
 
         // 全局函数
@@ -801,6 +984,14 @@
                 errorElement.textContent = '工号或姓名输入错误';
                 errorElement.style.display = 'block';
             }
+        }
+
+        function showLeaderboard() {
+            game.showLeaderboard();
+        }
+
+        function closeLeaderboard() {
+            game.closeLeaderboard();
         }
 
         // 初始化游戏
