@@ -1016,7 +1016,11 @@
                         return;
                     }
 
-                    const response = await fetch(`https://api.github.com/gists/${this.gistConfig.gistId}`);
+                    // 使用CORS代理服务解决跨域问题
+                    const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                    const apiUrl = encodeURIComponent(`https://api.github.com/gists/${this.gistConfig.gistId}`);
+                    const response = await fetch(proxyUrl + apiUrl);
+                    
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
@@ -1055,6 +1059,10 @@
                         return;
                     }
 
+                    // 注意：由于CORS限制，保存操作可能失败
+                    // 建议使用服务器端代理或GitHub Actions
+                    console.warn('由于CORS限制，保存到Gist可能失败。建议使用服务器端解决方案。');
+                    
                     const response = await fetch(`https://api.github.com/gists/${this.gistConfig.gistId}`, {
                         method: 'PATCH',
                         headers: {
@@ -1087,6 +1095,8 @@
                     // 显示用户友好的提示
                     if (error.message.includes('401')) {
                         console.warn('GitHub Token无效，请检查配置');
+                    } else if (error.message.includes('CORS') || error.message.includes('Access-Control')) {
+                        console.warn('跨域访问被阻止，无法保存到Gist');
                     }
                 }
             }
