@@ -1023,27 +1023,13 @@
                     
                     let response;
                     try {
-                        response = await fetch(rawUrl, {
-                            cache: 'no-cache',
-                            headers: {
-                                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                                'Pragma': 'no-cache',
-                                'Expires': '0'
-                            }
-                        });
+                        response = await fetch(rawUrl);
                     } catch (corsError) {
                         console.log('直接访问失败，尝试使用代理服务');
                         // 使用CORS代理服务解决跨域问题
                         const proxyUrl = 'https://api.allorigins.win/raw?url=';
                         const apiUrl = encodeURIComponent(`https://api.github.com/gists/${this.gistConfig.gistId}`);
-                        response = await fetch(proxyUrl + apiUrl, {
-                            cache: 'no-cache',
-                            headers: {
-                                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                                'Pragma': 'no-cache',
-                                'Expires': '0'
-                            }
-                        });
+                        response = await fetch(proxyUrl + apiUrl);
                     }
                     
                     if (!response.ok) {
