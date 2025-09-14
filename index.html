@@ -371,8 +371,11 @@
 
             init() {
                 this.createPuzzle();
-                this.shufflePuzzle();
                 this.renderPuzzle();
+                // 首次进入游戏时自动打乱
+                setTimeout(() => {
+                    this.shufflePuzzle();
+                }, 500); // 延迟500ms确保界面完全加载
             }
 
             createPuzzle() {
@@ -440,8 +443,8 @@
                 // 先重置到初始状态
                 this.resetPuzzle();
                 
-                // 进行多次随机移动来打乱，保持空白块在右上角
-                for (let i = 0; i < 100; i++) {
+                // 然后进行多次随机移动来打乱，但限制移动范围
+                for (let i = 0; i < 50; i++) {
                     const emptyIndex = this.pieceImages.indexOf(null);
                     const possibleMoves = [];
                     
@@ -460,12 +463,54 @@
                     }
                 }
                 
+                // 现在将空白块移动回右上角，通过合法的移动
+                this.moveEmptyToTopRight();
+                
                 this.moveCount = 0;
                 document.getElementById('moveCount').textContent = this.moveCount;
                 this.isGameWon = false;
                 this.renderPuzzle();
             }
 
+            moveEmptyToTopRight() {
+                // 通过合法移动将空白块移动到右上角（位置2）
+                const targetPosition = 2;
+                let currentEmptyIndex = this.pieceImages.indexOf(null);
+                
+                while (currentEmptyIndex !== targetPosition) {
+                    // 找到可以移动到空白位置的图片块
+                    const possibleMoves = [];
+                    for (let j = 0; j < 9; j++) {
+                        if (j !== currentEmptyIndex && this.canMove(j, currentEmptyIndex)) {
+                            possibleMoves.push(j);
+                        }
+                    }
+                    
+                    if (possibleMoves.length > 0) {
+                        // 选择一个移动，优先选择朝向目标位置的移动
+                        let bestMove = possibleMoves[0];
+                        let bestDistance = Math.abs(Math.floor(bestMove / 3) - Math.floor(targetPosition / 3)) + 
+                                         Math.abs(bestMove % 3 - targetPosition % 3);
+                        
+                        for (let move of possibleMoves) {
+                            const distance = Math.abs(Math.floor(move / 3) - Math.floor(targetPosition / 3)) + 
+                                           Math.abs(move % 3 - targetPosition % 3);
+                            if (distance < bestDistance) {
+                                bestMove = move;
+                                bestDistance = distance;
+                            }
+                        }
+                        
+                        // 执行移动
+                        [this.pieceImages[bestMove], this.pieceImages[currentEmptyIndex]] = 
+                        [this.pieceImages[currentEmptyIndex], this.pieceImages[bestMove]];
+                        
+                        currentEmptyIndex = this.pieceImages.indexOf(null);
+                    } else {
+                        break; // 无法移动，退出循环
+                    }
+                }
+            }
 
             resetPuzzle() {
                 this.pieceImages = [
