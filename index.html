@@ -1026,6 +1026,15 @@
                     }
                     
                     const gist = await response.json();
+                    console.log('Gist响应数据:', gist);
+                    
+                    // 检查gist对象和files属性
+                    if (!gist || !gist.files) {
+                        console.error('Gist响应格式错误:', gist);
+                        this.leaderboard = {};
+                        return;
+                    }
+                    
                     const leaderboardData = gist.files['leaderboard.json'];
                     
                     if (leaderboardData && leaderboardData.content) {
