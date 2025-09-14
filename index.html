@@ -1006,6 +1006,11 @@
 
             async saveLeaderboardToGist() {
                 try {
+                    console.log('开始同步到Gist', {
+                        gistId: this.gistConfig.gistId,
+                        leaderboard: this.leaderboard
+                    });
+                    
                     if (!this.gistConfig.gistId || this.gistConfig.gistId === 'YOUR_GIST_ID_HERE') {
                         console.log('Gist配置未设置，仅保存到本地存储');
                         this.saveLeaderboard();
@@ -1037,6 +1042,12 @@
                         console.log('排行榜数据已同步到Gist');
                         this.saveLeaderboard(); // 同时保存到本地
                     } else {
+                        const errorText = await response.text();
+                        console.error('Gist同步失败', {
+                            status: response.status,
+                            statusText: response.statusText,
+                            error: errorText
+                        });
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                 } catch (error) {
@@ -1047,10 +1058,25 @@
             }
 
             async updateLeaderboard() {
-                if (!this.isLoggedIn || !this.currentUser) return;
+                console.log('updateLeaderboard called', {
+                    isLoggedIn: this.isLoggedIn,
+                    currentUser: this.currentUser,
+                    moveCount: this.moveCount
+                });
+                
+                if (!this.isLoggedIn || !this.currentUser) {
+                    console.log('用户未登录，跳过排行榜更新');
+                    return;
+                }
                 
                 const userId = this.currentUser.工号;
                 const currentBest = this.leaderboard[userId];
+                
+                console.log('当前用户信息', {
+                    userId,
+                    currentBest,
+                    moveCount: this.moveCount
+                });
                 
                 // 如果没有记录或者当前成绩更好，则更新
                 if (!currentBest || this.moveCount < currentBest.score) {
@@ -1059,8 +1085,11 @@
                         score: this.moveCount,
                         timestamp: new Date().toISOString()
                     };
+                    console.log('更新排行榜数据', this.leaderboard[userId]);
                     // 同步到Gist
                     await this.saveLeaderboardToGist();
+                } else {
+                    console.log('当前成绩不如历史最佳，不更新');
                 }
             }
 
