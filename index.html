@@ -1016,19 +1016,34 @@
                         return;
                     }
 
-                    // 尝试直接访问GitHub Gist的raw URL
-                    const rawUrl = `https://gist.githubusercontent.com/hmh38324/${this.gistConfig.gistId}/raw/leaderboard.json`;
+                    // 尝试直接访问GitHub Gist的raw URL，添加时间戳防止缓存
+                    const timestamp = new Date().getTime();
+                    const rawUrl = `https://gist.githubusercontent.com/hmh38324/${this.gistConfig.gistId}/raw/leaderboard.json?t=${timestamp}`;
                     console.log('尝试访问raw URL:', rawUrl);
                     
                     let response;
                     try {
-                        response = await fetch(rawUrl);
+                        response = await fetch(rawUrl, {
+                            cache: 'no-cache',
+                            headers: {
+                                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                'Pragma': 'no-cache',
+                                'Expires': '0'
+                            }
+                        });
                     } catch (corsError) {
                         console.log('直接访问失败，尝试使用代理服务');
                         // 使用CORS代理服务解决跨域问题
                         const proxyUrl = 'https://api.allorigins.win/raw?url=';
                         const apiUrl = encodeURIComponent(`https://api.github.com/gists/${this.gistConfig.gistId}`);
-                        response = await fetch(proxyUrl + apiUrl);
+                        response = await fetch(proxyUrl + apiUrl, {
+                            cache: 'no-cache',
+                            headers: {
+                                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                'Pragma': 'no-cache',
+                                'Expires': '0'
+                            }
+                        });
                     }
                     
                     if (!response.ok) {
