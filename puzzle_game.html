@@ -411,7 +411,7 @@
                     <!-- 拼图块将通过JavaScript动态生成 -->
                 </div>
                 <div class="score">
-                    <p>移动次数: <span id="moveCount">0</span> <span id="userInfo"></span></p>
+                    <p>移动次数: <span id="moveCount">0</span>   当前用户: <span id="userInfo"></span></p>
                 </div>
             </div>
             
@@ -706,10 +706,10 @@
             updateUserInfo() {
                 const userInfoElement = document.getElementById('userInfo');
                 if (this.isLoggedIn && this.currentUser) {
-                    userInfoElement.textContent = `(${this.currentUser.姓名} - ${this.currentUser.工号})`;
+                    userInfoElement.textContent = `${this.currentUser.姓名}(${this.currentUser.工号})`;
                     userInfoElement.style.color = '#4CAF50';
                 } else {
-                    userInfoElement.textContent = '(未登录)';
+                    userInfoElement.textContent = '未登录';
                     userInfoElement.style.color = '#e74c3c';
                 }
             }
