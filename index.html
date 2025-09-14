@@ -219,6 +219,92 @@
             z-index: 999;
         }
 
+        .login-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.98);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            display: none;
+            z-index: 1001;
+            width: 350px;
+        }
+
+        .login-content h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: bold;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .form-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .form-buttons button[type="submit"] {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .form-buttons button[type="button"] {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .form-buttons button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .error-message {
+            color: #e74c3c;
+            margin-top: 10px;
+            font-size: 14px;
+            display: none;
+        }
+
         @media (max-width: 768px) {
             .game-content {
                 flex-direction: column;
@@ -316,7 +402,7 @@
         
         <div class="controls">
             <button onclick="shufflePuzzle()">🔀 打乱</button>
-            <button onclick="resetPuzzle()">🔄 重置</button>
+            <button onclick="showLoginModal()" id="loginBtn">🔐 登录</button>
         </div>
         
         <div class="game-content">
@@ -325,7 +411,7 @@
                     <!-- 拼图块将通过JavaScript动态生成 -->
                 </div>
                 <div class="score">
-                    <p>移动次数: <span id="moveCount">0</span></p>
+                    <p>移动次数: <span id="moveCount">0</span> <span id="userInfo"></span></p>
                 </div>
             </div>
             
@@ -347,6 +433,28 @@
         <button onclick="closeWinMessage()">再玩一次</button>
     </div>
 
+    <!-- 登录弹窗 -->
+    <div class="login-modal" id="loginModal">
+        <div class="login-content">
+            <h2>🔐 用户登录</h2>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="employeeId">工号:</label>
+                    <input type="text" id="employeeId" name="employeeId" required>
+                </div>
+                <div class="form-group">
+                    <label for="employeeName">姓名:</label>
+                    <input type="text" id="employeeName" name="employeeName" required>
+                </div>
+                <div class="form-buttons">
+                    <button type="submit">登录</button>
+                    <button type="button" onclick="closeLoginModal()">取消</button>
+                </div>
+            </form>
+            <div id="loginError" class="error-message"></div>
+        </div>
+    </div>
+
     <script>
         class PuzzleGame {
             constructor() {
@@ -354,6 +462,9 @@
                 this.emptyIndex = 2; // 右上角位置（索引2）是空的
                 this.moveCount = 0;
                 this.isGameWon = false;
+                this.isLoggedIn = false;
+                this.currentUser = null;
+                this.peopleData = null;
                 this.pieceImages = [
                     'split_images/liqun_part_1_1.png',
                     'split_images/liqun_part_1_2.png',
@@ -366,12 +477,30 @@
                     'split_images/liqun_part_3_3.png'
                 ];
                 this.correctOrder = [0, 1, null, 3, 4, 5, 6, 7, 8];
-                this.init();
+                this.loadPeopleData();
+            }
+
+            async loadPeopleData() {
+                try {
+                    const response = await fetch('people.json');
+                    this.peopleData = await response.json();
+                    this.init();
+                } catch (error) {
+                    console.error('加载人员数据失败:', error);
+                    // 使用默认数据
+                    this.peopleData = [
+                        {"工号": "1", "姓名": "张三"},
+                        {"工号": "2", "姓名": "李四"},
+                        {"工号": "3", "姓名": "王五"}
+                    ];
+                    this.init();
+                }
             }
 
             init() {
                 this.createPuzzle();
                 this.renderPuzzle();
+                this.updateUserInfo();
                 // 首次进入游戏时自动打乱
                 setTimeout(() => {
                     this.shufflePuzzle();
@@ -411,6 +540,12 @@
 
             movePiece(index) {
                 if (this.isGameWon) return;
+                
+                // 检查是否已登录
+                if (!this.isLoggedIn) {
+                    alert('请先登录才能开始游戏！');
+                    return;
+                }
                 
                 const emptyIndex = this.pieceImages.indexOf(null);
                 
@@ -567,6 +702,57 @@
                 document.getElementById('overlay').style.display = 'block';
                 document.getElementById('winMessage').style.display = 'block';
             }
+
+            updateUserInfo() {
+                const userInfoElement = document.getElementById('userInfo');
+                if (this.isLoggedIn && this.currentUser) {
+                    userInfoElement.textContent = `(${this.currentUser.姓名} - ${this.currentUser.工号})`;
+                    userInfoElement.style.color = '#4CAF50';
+                } else {
+                    userInfoElement.textContent = '(未登录)';
+                    userInfoElement.style.color = '#e74c3c';
+                }
+            }
+
+            validateLogin(employeeId, employeeName) {
+                if (!this.peopleData) return false;
+                
+                return this.peopleData.some(person => 
+                    person.工号 === employeeId && person.姓名 === employeeName
+                );
+            }
+
+            login(employeeId, employeeName) {
+                if (this.validateLogin(employeeId, employeeName)) {
+                    this.isLoggedIn = true;
+                    this.currentUser = { 工号: employeeId, 姓名: employeeName };
+                    this.updateUserInfo();
+                    this.closeLoginModal();
+                    return true;
+                }
+                return false;
+            }
+
+            logout() {
+                this.isLoggedIn = false;
+                this.currentUser = null;
+                this.updateUserInfo();
+            }
+
+            showLoginModal() {
+                document.getElementById('overlay').style.display = 'block';
+                document.getElementById('loginModal').style.display = 'block';
+                document.getElementById('loginError').style.display = 'none';
+            }
+
+            closeLoginModal() {
+                document.getElementById('overlay').style.display = 'none';
+                document.getElementById('loginModal').style.display = 'none';
+                document.getElementById('loginError').style.display = 'none';
+                // 清空输入框
+                document.getElementById('employeeId').value = '';
+                document.getElementById('employeeName').value = '';
+            }
         }
 
         // 全局函数
@@ -584,6 +770,37 @@
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('winMessage').style.display = 'none';
             game.shufflePuzzle();
+        }
+
+        function showLoginModal() {
+            game.showLoginModal();
+        }
+
+        function closeLoginModal() {
+            game.closeLoginModal();
+        }
+
+        function handleLogin(event) {
+            event.preventDefault();
+            
+            const employeeId = document.getElementById('employeeId').value.trim();
+            const employeeName = document.getElementById('employeeName').value.trim();
+            const errorElement = document.getElementById('loginError');
+            
+            if (!employeeId || !employeeName) {
+                errorElement.textContent = '请输入工号和姓名';
+                errorElement.style.display = 'block';
+                return;
+            }
+            
+            if (game.login(employeeId, employeeName)) {
+                // 登录成功
+                errorElement.style.display = 'none';
+            } else {
+                // 登录失败
+                errorElement.textContent = '工号或姓名输入错误';
+                errorElement.style.display = 'block';
+            }
         }
 
         // 初始化游戏
