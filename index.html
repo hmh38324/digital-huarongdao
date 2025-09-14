@@ -443,8 +443,8 @@
                 // 先重置到初始状态
                 this.resetPuzzle();
                 
-                // 然后进行多次随机移动来打乱，但限制移动范围
-                for (let i = 0; i < 50; i++) {
+                // 然后进行多次随机移动来打乱，增加随机步数
+                for (let i = 0; i < 150; i++) {
                     const emptyIndex = this.pieceImages.indexOf(null);
                     const possibleMoves = [];
                     
