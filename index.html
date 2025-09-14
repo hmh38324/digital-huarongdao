@@ -1042,7 +1042,7 @@
                         // 检查是否是直接访问raw URL（返回JSON数据）
                         if (response.url.includes('gist.githubusercontent.com')) {
                             this.leaderboard = JSON.parse(responseText);
-                            console.log('从raw URL加载排行榜数据成功');
+                            console.log('从raw URL加载排行榜数据成功:', this.leaderboard);
                         } else {
                             // 通过代理服务访问（返回Gist对象）
                             const gist = JSON.parse(responseText);
@@ -1194,6 +1194,12 @@
             renderLeaderboard() {
                 const leaderboardList = document.getElementById('leaderboardList');
                 const entries = Object.entries(this.leaderboard);
+                
+                console.log('渲染排行榜数据:', {
+                    leaderboard: this.leaderboard,
+                    entries: entries,
+                    entriesCount: entries.length
+                });
                 
                 if (entries.length === 0) {
                     leaderboardList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">暂无排行榜数据</p>';
