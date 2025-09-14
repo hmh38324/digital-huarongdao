@@ -1016,33 +1016,60 @@
                         return;
                     }
 
-                    // 使用CORS代理服务解决跨域问题
-                    const proxyUrl = 'https://api.allorigins.win/raw?url=';
-                    const apiUrl = encodeURIComponent(`https://api.github.com/gists/${this.gistConfig.gistId}`);
-                    const response = await fetch(proxyUrl + apiUrl);
+                    // 尝试直接访问GitHub Gist的raw URL
+                    const rawUrl = `https://gist.githubusercontent.com/hmh38324/${this.gistConfig.gistId}/raw/leaderboard.json`;
+                    console.log('尝试访问raw URL:', rawUrl);
+                    
+                    let response;
+                    try {
+                        response = await fetch(rawUrl);
+                    } catch (corsError) {
+                        console.log('直接访问失败，尝试使用代理服务');
+                        // 使用CORS代理服务解决跨域问题
+                        const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                        const apiUrl = encodeURIComponent(`https://api.github.com/gists/${this.gistConfig.gistId}`);
+                        response = await fetch(proxyUrl + apiUrl);
+                    }
                     
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                     
-                    const gist = await response.json();
-                    console.log('Gist响应数据:', gist);
+                    const responseText = await response.text();
+                    console.log('原始响应数据:', responseText);
                     
-                    // 检查gist对象和files属性
-                    if (!gist || !gist.files) {
-                        console.error('Gist响应格式错误:', gist);
+                    try {
+                        // 检查是否是直接访问raw URL（返回JSON数据）
+                        if (response.url.includes('gist.githubusercontent.com')) {
+                            this.leaderboard = JSON.parse(responseText);
+                            console.log('从raw URL加载排行榜数据成功');
+                        } else {
+                            // 通过代理服务访问（返回Gist对象）
+                            const gist = JSON.parse(responseText);
+                            console.log('解析后的Gist数据:', gist);
+                            
+                            // 检查gist对象和files属性
+                            if (!gist || !gist.files) {
+                                console.error('Gist响应格式错误:', gist);
+                                this.leaderboard = {};
+                                return;
+                            }
+                            
+                            const leaderboardData = gist.files['leaderboard.json'];
+                            
+                            if (leaderboardData && leaderboardData.content) {
+                                this.leaderboard = JSON.parse(leaderboardData.content);
+                                console.log('从Gist加载排行榜数据成功');
+                            } else {
+                                console.log('Gist中没有排行榜数据');
+                                this.leaderboard = {};
+                            }
+                        }
+                    } catch (parseError) {
+                        console.error('JSON解析失败:', parseError);
+                        console.error('响应内容:', responseText);
                         this.leaderboard = {};
                         return;
-                    }
-                    
-                    const leaderboardData = gist.files['leaderboard.json'];
-                    
-                    if (leaderboardData && leaderboardData.content) {
-                        this.leaderboard = JSON.parse(leaderboardData.content);
-                        console.log('从Gist加载排行榜数据成功');
-                    } else {
-                        console.log('Gist中没有排行榜数据');
-                        this.leaderboard = {};
                     }
                 } catch (error) {
                     console.error('从Gist加载排行榜失败:', error);
