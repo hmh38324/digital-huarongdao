@@ -963,21 +963,14 @@
                 document.getElementById('employeeName').value = '';
             }
 
-            loadLeaderboard() {
-                const saved = localStorage.getItem('puzzleLeaderboard');
-                return saved ? JSON.parse(saved) : {};
-            }
-
-            saveLeaderboard() {
-                localStorage.setItem('puzzleLeaderboard', JSON.stringify(this.leaderboard));
-            }
+            // 删除本地存储功能，只使用Gist
 
             // GitHub Gist API 相关方法
             async loadLeaderboardFromGist() {
                 try {
                     if (!this.gistConfig.gistId || this.gistConfig.gistId === 'YOUR_GIST_ID_HERE') {
-                        console.log('Gist配置未设置，使用本地存储');
-                        this.leaderboard = this.loadLeaderboard();
+                        console.log('Gist配置未设置，排行榜功能不可用');
+                        this.leaderboard = {};
                         return;
                     }
 
@@ -991,16 +984,15 @@
                     
                     if (leaderboardData && leaderboardData.content) {
                         this.leaderboard = JSON.parse(leaderboardData.content);
-                        this.saveLeaderboard(); // 同步到本地存储
                         console.log('从Gist加载排行榜数据成功');
                     } else {
-                        console.log('Gist中没有排行榜数据，使用本地存储');
-                        this.leaderboard = this.loadLeaderboard();
+                        console.log('Gist中没有排行榜数据');
+                        this.leaderboard = {};
                     }
                 } catch (error) {
                     console.error('从Gist加载排行榜失败:', error);
-                    console.log('使用本地存储数据');
-                    this.leaderboard = this.loadLeaderboard();
+                    console.log('排行榜功能不可用');
+                    this.leaderboard = {};
                 }
             }
 
@@ -1012,14 +1004,12 @@
                     });
                     
                     if (!this.gistConfig.gistId || this.gistConfig.gistId === 'YOUR_GIST_ID_HERE') {
-                        console.log('Gist配置未设置，仅保存到本地存储');
-                        this.saveLeaderboard();
+                        console.log('Gist配置未设置，无法保存排行榜');
                         return;
                     }
 
                     if (!this.gistConfig.token || this.gistConfig.token === 'YOUR_GITHUB_TOKEN_HERE') {
-                        console.log('GitHub Token未设置，仅保存到本地存储');
-                        this.saveLeaderboard();
+                        console.log('GitHub Token未设置，无法保存排行榜');
                         return;
                     }
 
@@ -1040,7 +1030,6 @@
 
                     if (response.ok) {
                         console.log('排行榜数据已同步到Gist');
-                        this.saveLeaderboard(); // 同时保存到本地
                     } else {
                         const errorText = await response.text();
                         console.error('Gist同步失败', {
@@ -1052,8 +1041,7 @@
                     }
                 } catch (error) {
                     console.error('保存到Gist失败:', error);
-                    console.log('仅保存到本地存储');
-                    this.saveLeaderboard();
+                    console.log('排行榜数据无法保存');
                     // 显示用户友好的提示
                     if (error.message.includes('401')) {
                         console.warn('GitHub Token无效，请检查配置');
