@@ -565,7 +565,7 @@
                 <!-- 排行榜内容将通过JavaScript动态生成 -->
             </div>
             <div class="leaderboard-buttons">
-                <button onclick="game.exportLeaderboardData()">导出数据</button>
+                <button onclick="refreshLeaderboard()" style="background: #2196F3; margin-right: 10px;">🔄 刷新</button>
                 <button onclick="closeLeaderboard()">关闭</button>
             </div>
         </div>
@@ -594,12 +594,8 @@
                     'split_images/liqun_part_3_3.png'
                 ];
                 this.correctOrder = [0, 1, null, 3, 4, 5, 6, 7, 8];
-                this.initializeGame();
-            }
-
-            async initializeGame() {
-                await this.loadLeaderboard();
                 this.loadPeopleData();
+                this.loadLeaderboard();
             }
 
             async loadPeopleData() {
@@ -880,62 +876,53 @@
 
             async loadLeaderboard() {
                 try {
-                    // 首先尝试从远程加载
+                    // 首先尝试从云端加载
                     const response = await fetch('leaderboard.json');
-                    if (response.ok) {
-                        const remoteData = await response.json();
-                        // 合并本地和远程数据，保留更好的成绩
-                        const localData = this.loadLocalLeaderboard();
-                        this.leaderboard = this.mergeLeaderboardData(localData, remoteData);
-                        // 保存合并后的数据到本地
-                        this.saveLocalLeaderboard();
-                        return this.leaderboard;
-                    }
+                    const cloudData = await response.json();
+                    
+                    // 同时检查本地存储的数据
+                    const localData = localStorage.getItem('puzzleLeaderboard');
+                    const localLeaderboard = localData ? JSON.parse(localData) : {};
+                    
+                    // 合并云端和本地数据，本地数据优先（更新的数据）
+                    this.leaderboard = { ...cloudData, ...localLeaderboard };
+                    
+                    console.log('排行榜数据加载成功:', this.leaderboard);
                 } catch (error) {
-                    console.log('无法加载远程排行榜，使用本地数据:', error);
+                    console.error('加载云端排行榜数据失败，使用本地数据:', error);
+                    // 如果云端加载失败，使用本地数据
+                    const localData = localStorage.getItem('puzzleLeaderboard');
+                    this.leaderboard = localData ? JSON.parse(localData) : {};
                 }
-                
-                // 如果远程加载失败，使用本地数据
-                return this.loadLocalLeaderboard();
-            }
-
-            loadLocalLeaderboard() {
-                const saved = localStorage.getItem('puzzleLeaderboard');
-                return saved ? JSON.parse(saved) : {};
-            }
-
-            saveLocalLeaderboard() {
-                localStorage.setItem('puzzleLeaderboard', JSON.stringify(this.leaderboard));
-            }
-
-            mergeLeaderboardData(localData, remoteData) {
-                const merged = { ...remoteData };
-                
-                // 合并本地数据，保留更好的成绩
-                Object.entries(localData).forEach(([userId, data]) => {
-                    if (!merged[userId] || data.score < merged[userId].score) {
-                        merged[userId] = data;
-                    }
-                });
-                
-                return merged;
             }
 
             async saveLeaderboard() {
-                // 保存到本地
-                this.saveLocalLeaderboard();
-                
-                // 尝试保存到远程（这里只是模拟，实际需要服务器支持）
                 try {
-                    // 注意：由于GitHub Pages是静态托管，无法直接写入文件
-                    // 这里我们只能保存到本地，用户需要手动同步
-                    console.log('排行榜数据已保存到本地，如需跨设备同步，请手动更新leaderboard.json文件');
+                    // 保存到本地存储
+                    localStorage.setItem('puzzleLeaderboard', JSON.stringify(this.leaderboard));
+                    console.log('排行榜数据已保存到本地存储');
+                    
+                    // 显示提示信息
+                    this.showLeaderboardUpdateMessage();
+                    
+                    // 尝试同步到云端（通过GitHub API）
+                    await this.syncToCloud();
                 } catch (error) {
-                    console.log('远程保存失败，数据已保存到本地:', error);
+                    console.error('保存排行榜数据失败:', error);
                 }
             }
 
-            updateLeaderboard() {
+            async syncToCloud() {
+                try {
+                    // 这里可以实现GitHub API同步
+                    // 由于需要认证，暂时跳过云端同步
+                    console.log('云端同步功能待实现');
+                } catch (error) {
+                    console.error('云端同步失败:', error);
+                }
+            }
+
+            async updateLeaderboard() {
                 if (!this.isLoggedIn || !this.currentUser) return;
                 
                 const userId = this.currentUser.工号;
@@ -948,25 +935,81 @@
                         score: this.moveCount,
                         timestamp: new Date().toISOString()
                     };
-                    this.saveLeaderboard();
+                    await this.saveLeaderboard();
                 }
             }
 
-            showLeaderboard() {
-                document.getElementById('overlay').style.display = 'block';
-                document.getElementById('leaderboardModal').style.display = 'block';
-                this.renderLeaderboard();
+            showLeaderboardUpdateMessage() {
+                // 创建提示消息
+                const message = document.createElement('div');
+                message.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #4CAF50;
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    z-index: 10000;
+                    font-size: 14px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                `;
+                message.textContent = '排行榜已更新！请刷新页面查看最新数据';
+                document.body.appendChild(message);
+                
+                // 3秒后自动移除
+                setTimeout(() => {
+                    if (message.parentNode) {
+                        message.parentNode.removeChild(message);
+                    }
+                }, 3000);
             }
 
-            exportLeaderboardData() {
-                const dataStr = JSON.stringify(this.leaderboard, null, 2);
-                const dataBlob = new Blob([dataStr], {type: 'application/json'});
-                const url = URL.createObjectURL(dataBlob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = 'leaderboard.json';
-                link.click();
-                URL.revokeObjectURL(url);
+            async refreshLeaderboard() {
+                try {
+                    // 重新加载排行榜数据
+                    await this.loadLeaderboard();
+                    this.renderLeaderboard();
+                    
+                    // 显示刷新成功消息
+                    const message = document.createElement('div');
+                    message.style.cssText = `
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        background: #2196F3;
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        z-index: 10000;
+                        font-size: 14px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                    `;
+                    message.textContent = '排行榜数据已刷新！';
+                    document.body.appendChild(message);
+                    
+                    // 2秒后自动移除
+                    setTimeout(() => {
+                        if (message.parentNode) {
+                            message.parentNode.removeChild(message);
+                        }
+                    }, 2000);
+                } catch (error) {
+                    console.error('刷新排行榜失败:', error);
+                }
+            }
+
+            async showLeaderboard() {
+                document.getElementById('overlay').style.display = 'block';
+                document.getElementById('leaderboardModal').style.display = 'block';
+                
+                // 显示加载中状态
+                const leaderboardList = document.getElementById('leaderboardList');
+                leaderboardList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">正在加载最新排行榜数据...</p>';
+                
+                // 重新加载排行榜数据
+                await this.loadLeaderboard();
+                this.renderLeaderboard();
             }
 
             closeLeaderboard() {
@@ -1057,6 +1100,10 @@
 
         function closeLeaderboard() {
             game.closeLeaderboard();
+        }
+
+        function refreshLeaderboard() {
+            game.refreshLeaderboard();
         }
 
         // 初始化游戏
