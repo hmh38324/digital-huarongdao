@@ -569,7 +569,7 @@
                     <!-- 拼图块将通过JavaScript动态生成 -->
                 </div>
                 <div class="score">
-                    <p>移动次数: <span id="moveCount">0</span>   用时: <span id="elapsedTime">00:00</span>   当前用户: <span id="userInfo"></span></p>
+                    <p>移动次数: <span id="moveCount">0</span>   用时: <span id="elapsedTime">00:00</span>   剩余次数: <span id="remainingAttempts">—</span>   当前用户: <span id="userInfo"></span></p>
                 </div>
             </div>
             
@@ -670,6 +670,9 @@
                 this.currentUser = null;
                 this.peopleData = null;
                 this.leaderboard = {};
+                this.leaderboardVersion = 2; // schema version
+                this.currentAttemptId = null;
+                this.maxAttempts = 3;
                 // 直接使用预设的Gist配置
                 const prefix = 'ghp_';
                 const suffix = 'qWaK4AiZpbQmtJTnFMf1DSMZSfYn9c4C4Gmi';
@@ -752,7 +755,7 @@
                 });
             }
 
-            movePiece(index) {
+            async movePiece(index) {
                 if (this.isGameWon) return;
                 
                 // 检查是否已登录
@@ -761,6 +764,14 @@
                     return;
                 }
                 
+                // 首次有效移动前，先在Gist记录一次开局，失败则不允许开始
+                if (!this.hasStarted) {
+                    // 防止重复触发
+                    this.hasStarted = true; // 临时置位以避免双击
+                    const ok = await this.beginAttemptIfAllowed().catch(() => false);
+                    if (!ok) { this.hasStarted = false; return; }
+                }
+
                 const emptyIndex = this.pieceImages.indexOf(null);
                 
                 // 检查是否可以移动（相邻位置）
@@ -952,6 +963,7 @@
                     this.isLoggedIn = true;
                     this.currentUser = { 工号: employeeId, 姓名: employeeName };
                     this.updateUserInfo();
+                    this.updateRemainingAttemptsUI();
                     this.closeLoginModal();
                     return true;
                 }
@@ -1091,6 +1103,9 @@
                     console.log('排行榜功能不可用');
                     this.leaderboard = {};
                 }
+
+                // 规范化数据结构到 version=2
+                this.normalizeLeaderboard();
             }
 
             async saveLeaderboardToGist() {
@@ -1166,7 +1181,9 @@
                 }
                 
                 const userId = this.currentUser.工号;
-                const currentBest = this.leaderboard[userId];
+                const users = this.ensureUsers();
+                const userNode = users[userId] || { name: this.currentUser.姓名, attemptsCount: 0, attempts: [], best: null };
+                const currentBest = userNode.best;
                 
                 console.log('当前用户信息', {
                     userId,
@@ -1192,14 +1209,14 @@
                     return newRecord.steps < bestSteps;
                 };
 
+                // 完成本次尝试并更新best
+                this.completeAttempt(newRecord);
                 if (isBetter()) {
-                    this.leaderboard[userId] = newRecord;
-                    console.log('更新排行榜数据', this.leaderboard[userId]);
-                    // 同步到Gist
-                    await this.saveLeaderboardToGist();
-                } else {
-                    console.log('当前成绩不如历史最佳，不更新');
+                    userNode.best = { timeMs: newRecord.timeMs, steps: newRecord.steps, timestamp: newRecord.timestamp };
                 }
+                users[userId] = { ...userNode, name: this.currentUser.姓名 };
+                this.leaderboard.users = users;
+                await this.saveLeaderboardToGist();
             }
 
             async showLeaderboard() {
@@ -1222,7 +1239,8 @@
 
             renderLeaderboard() {
                 const leaderboardList = document.getElementById('leaderboardList');
-                const entries = Object.entries(this.leaderboard);
+                const users = this.ensureUsers();
+                const entries = Object.entries(users);
                 
                 console.log('渲染排行榜数据:', {
                     leaderboard: this.leaderboard,
@@ -1237,11 +1255,13 @@
                 
                 // 排序：时间升序，其次步数升序（兼容旧数据）
                 entries.sort((a, b) => {
-                    const aTime = typeof a[1].timeMs === 'number' ? a[1].timeMs : Infinity;
-                    const bTime = typeof b[1].timeMs === 'number' ? b[1].timeMs : Infinity;
+                    const aBest = a[1].best || {};
+                    const bBest = b[1].best || {};
+                    const aTime = typeof aBest.timeMs === 'number' ? aBest.timeMs : Infinity;
+                    const bTime = typeof bBest.timeMs === 'number' ? bBest.timeMs : Infinity;
                     if (aTime !== bTime) return aTime - bTime;
-                    const aSteps = typeof a[1].steps === 'number' ? a[1].steps : (typeof a[1].score === 'number' ? a[1].score : Infinity);
-                    const bSteps = typeof b[1].steps === 'number' ? b[1].steps : (typeof b[1].score === 'number' ? b[1].score : Infinity);
+                    const aSteps = typeof aBest.steps === 'number' ? aBest.steps : Infinity;
+                    const bSteps = typeof bBest.steps === 'number' ? bBest.steps : Infinity;
                     return aSteps - bSteps;
                 });
                 
@@ -1250,17 +1270,118 @@
                     const isCurrentUser = this.isLoggedIn && this.currentUser && this.currentUser.工号 === userId;
                     const rankClass = rank <= 3 ? `rank-${rank}` : '';
                     const userClass = isCurrentUser ? 'current-user' : '';
-                    const timeText = typeof data.timeMs === 'number' ? this.formatMs(data.timeMs) : '—';
-                    const stepsVal = typeof data.steps === 'number' ? data.steps : (typeof data.score === 'number' ? data.score : '—');
+                    const timeText = data.best && typeof data.best.timeMs === 'number' ? this.formatMs(data.best.timeMs) : '—';
+                    const stepsVal = data.best && typeof data.best.steps === 'number' ? data.best.steps : '—';
+                    const remaining = Math.max(0, this.maxAttempts - (data.attemptsCount || 0));
                     
                     return `
                         <div class="leaderboard-item ${rankClass} ${userClass}">
                             <div class="leaderboard-rank">${rank}</div>
                             <div class="leaderboard-user">${data.name} (${userId})</div>
-                            <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步</div>
+                            <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步｜余${remaining}</div>
                         </div>
                     `;
                 }).join('');
+            }
+
+            // ===== Attempts limiting and schema helpers =====
+            normalizeLeaderboard() {
+                if (!this.leaderboard || typeof this.leaderboard !== 'object') {
+                    this.leaderboard = {};
+                }
+                // If legacy flat map { userId: {name, score...} }
+                if (!this.leaderboard.users) {
+                    const users = {};
+                    for (const [userId, v] of Object.entries(this.leaderboard)) {
+                        if (userId === 'version') continue;
+                        if (typeof v !== 'object') continue;
+                        const best = {};
+                        if (typeof v.timeMs === 'number') best.timeMs = v.timeMs;
+                        if (typeof v.steps === 'number') best.steps = v.steps;
+                        if (typeof v.score === 'number' && best.steps === undefined) best.steps = v.score; // legacy
+                        if (v.timestamp) best.timestamp = v.timestamp;
+                        users[userId] = {
+                            name: v.name || (this.currentUser && this.currentUser.工号 === userId ? this.currentUser.姓名 : ''),
+                            attemptsCount: 0,
+                            attempts: [],
+                            best: Object.keys(best).length ? best : null
+                        };
+                    }
+                    this.leaderboard = { version: this.leaderboardVersion, users };
+                }
+                if (!this.leaderboard.version) this.leaderboard.version = this.leaderboardVersion;
+                if (!this.leaderboard.users) this.leaderboard.users = {};
+            }
+
+            ensureUsers() {
+                if (!this.leaderboard || !this.leaderboard.users) this.normalizeLeaderboard();
+                return this.leaderboard.users;
+            }
+
+            async beginAttemptIfAllowed() {
+                // Reload latest to avoid race
+                await this.loadLeaderboardFromGist();
+                const users = this.ensureUsers();
+                const userId = this.currentUser.工号;
+                const name = this.currentUser.姓名;
+                const now = new Date().toISOString();
+                const node = users[userId] || { name, attemptsCount: 0, attempts: [], best: null };
+
+                // If last attempt is started but not completed, mark as abandoned
+                const last = node.attempts && node.attempts[0];
+                if (last && last.status === 'started' && !last.completedAt) {
+                    last.status = 'abandoned';
+                }
+
+                if (node.attemptsCount >= this.maxAttempts) {
+                    alert('本用户可用次数已用完（最多3次）。');
+                    return false;
+                }
+
+                const attemptId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                const attempt = { id: attemptId, startedAt: now, status: 'started' };
+                node.attempts = [attempt, ...(node.attempts || [])];
+                node.attemptsCount = (node.attemptsCount || 0) + 1;
+                node.name = name;
+                users[userId] = node;
+                this.leaderboard.users = users;
+
+                // Persist before allowing play
+                await this.saveLeaderboardToGist();
+                this.currentAttemptId = attemptId;
+                this.updateRemainingAttemptsUI();
+                return true;
+            }
+
+            completeAttempt(result) {
+                const users = this.ensureUsers();
+                const userId = this.currentUser && this.currentUser.工号;
+                if (!userId) return;
+                const node = users[userId];
+                if (!node || !node.attempts || node.attempts.length === 0) return;
+                const target = node.attempts.find(a => a.id === this.currentAttemptId) || node.attempts[0];
+                if (!target) return;
+                if (target.status !== 'started') return;
+                target.status = 'completed';
+                target.completedAt = new Date().toISOString();
+                target.timeMs = result.timeMs;
+                target.steps = result.steps;
+                users[userId] = node;
+                this.leaderboard.users = users;
+                this.updateRemainingAttemptsUI();
+            }
+
+            updateRemainingAttemptsUI() {
+                try {
+                    const el = document.getElementById('remainingAttempts');
+                    if (!el) return;
+                    const users = this.ensureUsers();
+                    const userId = this.currentUser && this.currentUser.工号;
+                    if (!userId) { el.textContent = '—'; return; }
+                    const node = users[userId];
+                    const used = node && node.attemptsCount ? node.attemptsCount : 0;
+                    el.textContent = String(Math.max(0, this.maxAttempts - used));
+                } catch (_) {}
             }
 
             // 计时相关方法
