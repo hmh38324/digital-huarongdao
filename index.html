@@ -662,7 +662,9 @@
                 this.emptyIndex = 2; // 右上角位置（索引2）是空的
                 this.moveCount = 0;
                 this.isGameWon = false;
-                this.hasStarted = false; // 是否已开始计时（首次有效移动后）
+                // 尝试与计时状态
+                this.hasAttemptRecorded = false; // 是否已向Gist记录开局
+                this.hasTimerRunning = false; // 是否已开始计时
                 this.timerStartMs = null; // 计时起点
                 this.elapsedMs = 0; // 当前累计用时
                 this.timerInterval = null; // 定时器句柄
@@ -765,13 +767,12 @@
                 }
                 
                 // 首次有效移动前，先在Gist记录一次开局，失败则不允许开始
-                if (!this.hasStarted) {
-                    // 防止重复触发
-                    this.hasStarted = true; // 临时置位以避免双击
+                if (!this.hasAttemptRecorded) {
                     const ok = await this.beginAttemptIfAllowed().catch(() => false);
-                    if (!ok) { this.hasStarted = false; return; }
+                    if (!ok) { return; }
+                    this.hasAttemptRecorded = true;
                 }
-
+                
                 const emptyIndex = this.pieceImages.indexOf(null);
                 
                 // 检查是否可以移动（相邻位置）
@@ -831,8 +832,9 @@
                 this.moveCount = 0;
                 document.getElementById('moveCount').textContent = this.moveCount;
                 this.isGameWon = false;
-                // 重置计时
+                // 重置计时与流程状态
                 this.resetTimer();
+                this.hasAttemptRecorded = false;
                 this.renderPuzzle();
             }
 
@@ -891,8 +893,9 @@
                 this.moveCount = 0;
                 document.getElementById('moveCount').textContent = this.moveCount;
                 this.isGameWon = false;
-                // 重置计时显示
+                // 重置计时显示与流程状态
                 this.resetTimer();
+                this.hasAttemptRecorded = false;
                 this.renderPuzzle();
             }
 
@@ -1194,11 +1197,11 @@
                 
                 // 评价规则：先比时间（更短更好），时间相同再比步数（更少更好）
                 const newRecord = {
-                    name: this.currentUser.姓名,
+                        name: this.currentUser.姓名,
                     timeMs: this.elapsedMs,
                     steps: this.moveCount,
-                    timestamp: new Date().toISOString()
-                };
+                        timestamp: new Date().toISOString()
+                    };
 
                 const isBetter = () => {
                     if (!currentBest) return true;
@@ -1386,8 +1389,8 @@
 
             // 计时相关方法
             startTimerIfNeeded() {
-                if (this.hasStarted) return;
-                this.hasStarted = true;
+                if (this.hasTimerRunning) return;
+                this.hasTimerRunning = true;
                 this.timerStartMs = Date.now();
                 // 清理可能存在的旧定时器
                 if (this.timerInterval) {
@@ -1406,9 +1409,10 @@
                     clearInterval(this.timerInterval);
                     this.timerInterval = null;
                 }
-                if (this.hasStarted && this.timerStartMs != null) {
+                if (this.hasTimerRunning && this.timerStartMs != null) {
                     this.elapsedMs = Date.now() - this.timerStartMs;
                 }
+                this.hasTimerRunning = false;
             }
 
             resetTimer() {
@@ -1416,11 +1420,11 @@
                     clearInterval(this.timerInterval);
                     this.timerInterval = null;
                 }
-                this.hasStarted = false;
+                this.hasTimerRunning = false;
                 this.timerStartMs = null;
                 this.elapsedMs = 0;
                 const el = document.getElementById('elapsedTime');
-                if (el) el.textContent = '0.00';
+                if (el) el.textContent = '00:00';
             }
 
             formatMs(ms) {
