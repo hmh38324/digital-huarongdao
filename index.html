@@ -1045,66 +1045,47 @@
                         return;
                     }
 
-                    // 尝试直接访问GitHub Gist的raw URL，添加时间戳防止缓存
-                    const timestamp = new Date().getTime();
-                    const rawUrl = `https://gist.githubusercontent.com/hmh38324/${this.gistConfig.gistId}/raw/leaderboard.json?t=${timestamp}`;
-                    console.log('尝试访问raw URL:', rawUrl);
-                    
-                    let response;
-                    try {
-                        response = await fetch(rawUrl);
-                    } catch (corsError) {
-                        console.log('直接访问失败，尝试使用代理服务');
-                        // 使用CORS代理服务解决跨域问题
-                        const proxyUrl = 'https://api.allorigins.win/raw?url=';
-                        const apiUrl = encodeURIComponent(`https://api.github.com/gists/${this.gistConfig.gistId}`);
-                        response = await fetch(proxyUrl + apiUrl);
-                    }
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    
-                    const responseText = await response.text();
-                    console.log('原始响应数据:', responseText);
-                    
-                    try {
-                        // 检查是否是直接访问raw URL（返回JSON数据）
-                        if (response.url.includes('gist.githubusercontent.com')) {
-                            this.leaderboard = JSON.parse(responseText);
-                            console.log('从raw URL加载排行榜数据成功:', this.leaderboard);
-                        } else {
-                            // 通过代理服务访问（返回Gist对象）
-                            const gist = JSON.parse(responseText);
-                            console.log('解析后的Gist数据:', gist);
-                            
-                            // 检查gist对象和files属性
-                            if (!gist || !gist.files) {
-                                console.error('Gist响应格式错误:', gist);
-                                this.leaderboard = {};
-                                return;
-                            }
-                            
-                            const leaderboardData = gist.files['leaderboard.json'];
-                            
-                            if (leaderboardData && leaderboardData.content) {
-                                this.leaderboard = JSON.parse(leaderboardData.content);
-                                console.log('从Gist加载排行榜数据成功');
-                            } else {
-                                console.log('Gist中没有排行榜数据');
-                                this.leaderboard = {};
-                            }
+                    // 优先使用 GitHub API（最新，不经CDN）
+                    const apiResp = await fetch(`https://api.github.com/gists/${this.gistConfig.gistId}`, {
+                        headers: {
+                            'Authorization': `token ${this.gistConfig.token}`
                         }
-                    } catch (parseError) {
-                        console.error('JSON解析失败:', parseError);
-                        console.error('响应内容:', responseText);
-                        this.leaderboard = {};
-                        return;
+                    });
+                    if (apiResp.ok) {
+                        const gist = await apiResp.json();
+                        const file = gist && gist.files && gist.files['leaderboard.json'];
+                        if (file && file.content) {
+                            this.leaderboard = JSON.parse(file.content);
+                            console.log('从GitHub API加载排行榜数据成功');
+                        } else {
+                            console.log('API返回无leaderboard.json，使用空表');
+                            this.leaderboard = {};
+                        }
+                    } else {
+                        // API 失败再退回到 raw URL（带时间戳避免浏览器缓存）
+                        const timestamp = Date.now();
+                        const rawUrl = `https://gist.githubusercontent.com/hmh38324/${this.gistConfig.gistId}/raw/leaderboard.json?t=${timestamp}`;
+                        console.log('API失败，改用raw URL:', rawUrl);
+                        const response = await fetch(rawUrl);
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        const text = await response.text();
+                        this.leaderboard = JSON.parse(text);
                     }
                 } catch (error) {
                     console.error('从Gist加载排行榜失败:', error);
-                    console.log('排行榜功能不可用');
-                    this.leaderboard = {};
+                    console.log('尝试使用代理获取');
+                    try {
+                        const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                        const apiUrl = encodeURIComponent(`https://api.github.com/gists/${this.gistConfig.gistId}`);
+                        const response = await fetch(proxyUrl + apiUrl);
+                        if (!response.ok) throw new Error(`proxy status ${response.status}`);
+                        const gist = await response.json();
+                        const file = gist && gist.files && gist.files['leaderboard.json'];
+                        this.leaderboard = file && file.content ? JSON.parse(file.content) : {};
+                    } catch (e2) {
+                        console.error('代理也失败:', e2);
+                        this.leaderboard = {};
+                    }
                 }
 
                 // 规范化数据结构到 version=2
@@ -1351,6 +1332,12 @@
 
                 // Persist before allowing play
                 await this.saveLeaderboardToGist();
+
+                // 轻量一致性重检：短暂延时后再拉一次，确认已写入
+                try {
+                    await new Promise(r => setTimeout(r, 200));
+                    await this.loadLeaderboardFromGist();
+                } catch (_) {}
                 this.currentAttemptId = attemptId;
                 this.updateRemainingAttemptsUI();
                 return true;
