@@ -569,7 +569,7 @@
                     <!-- 拼图块将通过JavaScript动态生成 -->
                 </div>
                 <div class="score">
-                    <p>移动次数: <span id="moveCount">0</span>   用时: <span id="elapsedTime">0.00</span>s   当前用户: <span id="userInfo"></span></p>
+                    <p>移动次数: <span id="moveCount">0</span>   用时: <span id="elapsedTime">00:00</span>   当前用户: <span id="userInfo"></span></p>
                 </div>
             </div>
             
@@ -588,7 +588,7 @@
         <h2>🎉 恭喜完成！</h2>
         <p>你成功完成了拼图！</p>
         <p>总移动次数: <span id="finalMoves">0</span></p>
-        <p>总用时: <span id="finalTime">0.00</span>s</p>
+        <p>总用时: <span id="finalTime">00:00</span></p>
         <button onclick="closeWinMessage()">再玩一次</button>
     </div>
 
@@ -1250,7 +1250,7 @@
                     const isCurrentUser = this.isLoggedIn && this.currentUser && this.currentUser.工号 === userId;
                     const rankClass = rank <= 3 ? `rank-${rank}` : '';
                     const userClass = isCurrentUser ? 'current-user' : '';
-                    const timeText = typeof data.timeMs === 'number' ? this.formatMs(data.timeMs) + 's' : '—';
+                    const timeText = typeof data.timeMs === 'number' ? this.formatMs(data.timeMs) : '—';
                     const stepsVal = typeof data.steps === 'number' ? data.steps : (typeof data.score === 'number' ? data.score : '—');
                     
                     return `
@@ -1303,15 +1303,13 @@
             }
 
             formatMs(ms) {
-                if (!ms || ms < 0) return '0.00';
-                const totalSeconds = ms / 1000;
+                if (!ms || ms < 0) return '00:00';
+                const totalSeconds = Math.floor(ms / 1000);
                 const minutes = Math.floor(totalSeconds / 60);
-                const seconds = Math.floor(totalSeconds % 60);
-                const centis = Math.floor((ms % 1000) / 10);
+                const seconds = totalSeconds % 60;
                 const mm = String(minutes).padStart(2, '0');
                 const ss = String(seconds).padStart(2, '0');
-                const cc = String(centis).padStart(2, '0');
-                return `${mm}:${ss}.${cc}`;
+                return `${mm}:${ss}`;
             }
         }
 
