@@ -569,7 +569,7 @@
                     <!-- 拼图块将通过JavaScript动态生成 -->
                 </div>
                 <div class="score">
-                    <p>移动次数: <span id="moveCount">0</span>   当前用户: <span id="userInfo"></span></p>
+                    <p>移动次数: <span id="moveCount">0</span>   用时: <span id="elapsedTime">0.00</span>s   当前用户: <span id="userInfo"></span></p>
                 </div>
             </div>
             
@@ -588,6 +588,7 @@
         <h2>🎉 恭喜完成！</h2>
         <p>你成功完成了拼图！</p>
         <p>总移动次数: <span id="finalMoves">0</span></p>
+        <p>总用时: <span id="finalTime">0.00</span>s</p>
         <button onclick="closeWinMessage()">再玩一次</button>
     </div>
 
@@ -661,6 +662,10 @@
                 this.emptyIndex = 2; // 右上角位置（索引2）是空的
                 this.moveCount = 0;
                 this.isGameWon = false;
+                this.hasStarted = false; // 是否已开始计时（首次有效移动后）
+                this.timerStartMs = null; // 计时起点
+                this.elapsedMs = 0; // 当前累计用时
+                this.timerInterval = null; // 定时器句柄
                 this.isLoggedIn = false;
                 this.currentUser = null;
                 this.peopleData = null;
@@ -760,6 +765,8 @@
                 
                 // 检查是否可以移动（相邻位置）
                 if (this.canMove(index, emptyIndex)) {
+                    // 首次有效移动时启动计时
+                    this.startTimerIfNeeded();
                     // 交换位置
                     [this.pieceImages[index], this.pieceImages[emptyIndex]] = 
                     [this.pieceImages[emptyIndex], this.pieceImages[index]];
@@ -813,6 +820,8 @@
                 this.moveCount = 0;
                 document.getElementById('moveCount').textContent = this.moveCount;
                 this.isGameWon = false;
+                // 重置计时
+                this.resetTimer();
                 this.renderPuzzle();
             }
 
@@ -871,6 +880,8 @@
                 this.moveCount = 0;
                 document.getElementById('moveCount').textContent = this.moveCount;
                 this.isGameWon = false;
+                // 重置计时显示
+                this.resetTimer();
                 this.renderPuzzle();
             }
 
@@ -899,6 +910,8 @@
                 
                 if (isCorrect) {
                     this.isGameWon = true;
+                    // 停止计时并计算用时
+                    this.stopTimer();
                     // 更新排行榜
                     this.updateLeaderboard();
                     // 停顿两秒后再显示成功提醒
@@ -910,6 +923,7 @@
 
             showWinMessage() {
                 document.getElementById('finalMoves').textContent = this.moveCount;
+                document.getElementById('finalTime').textContent = this.formatMs(this.elapsedMs);
                 document.getElementById('overlay').style.display = 'block';
                 document.getElementById('winMessage').style.display = 'block';
             }
@@ -1142,7 +1156,8 @@
                 console.log('updateLeaderboard called', {
                     isLoggedIn: this.isLoggedIn,
                     currentUser: this.currentUser,
-                    moveCount: this.moveCount
+                    moveCount: this.moveCount,
+                    elapsedMs: this.elapsedMs
                 });
                 
                 if (!this.isLoggedIn || !this.currentUser) {
@@ -1156,16 +1171,29 @@
                 console.log('当前用户信息', {
                     userId,
                     currentBest,
-                    moveCount: this.moveCount
+                    moveCount: this.moveCount,
+                    elapsedMs: this.elapsedMs
                 });
                 
-                // 如果没有记录或者当前成绩更好，则更新
-                if (!currentBest || this.moveCount < currentBest.score) {
-                    this.leaderboard[userId] = {
-                        name: this.currentUser.姓名,
-                        score: this.moveCount,
-                        timestamp: new Date().toISOString()
-                    };
+                // 评价规则：先比时间（更短更好），时间相同再比步数（更少更好）
+                const newRecord = {
+                    name: this.currentUser.姓名,
+                    timeMs: this.elapsedMs,
+                    steps: this.moveCount,
+                    timestamp: new Date().toISOString()
+                };
+
+                const isBetter = () => {
+                    if (!currentBest) return true;
+                    const bestTime = typeof currentBest.timeMs === 'number' ? currentBest.timeMs : Infinity;
+                    const bestSteps = typeof currentBest.steps === 'number' ? currentBest.steps : (typeof currentBest.score === 'number' ? currentBest.score : Infinity);
+                    if (newRecord.timeMs < bestTime) return true;
+                    if (newRecord.timeMs > bestTime) return false;
+                    return newRecord.steps < bestSteps;
+                };
+
+                if (isBetter()) {
+                    this.leaderboard[userId] = newRecord;
                     console.log('更新排行榜数据', this.leaderboard[userId]);
                     // 同步到Gist
                     await this.saveLeaderboardToGist();
@@ -1207,23 +1235,83 @@
                     return;
                 }
                 
-                // 按成绩排序（移动次数越少越好）
-                entries.sort((a, b) => a[1].score - b[1].score);
+                // 排序：时间升序，其次步数升序（兼容旧数据）
+                entries.sort((a, b) => {
+                    const aTime = typeof a[1].timeMs === 'number' ? a[1].timeMs : Infinity;
+                    const bTime = typeof b[1].timeMs === 'number' ? b[1].timeMs : Infinity;
+                    if (aTime !== bTime) return aTime - bTime;
+                    const aSteps = typeof a[1].steps === 'number' ? a[1].steps : (typeof a[1].score === 'number' ? a[1].score : Infinity);
+                    const bSteps = typeof b[1].steps === 'number' ? b[1].steps : (typeof b[1].score === 'number' ? b[1].score : Infinity);
+                    return aSteps - bSteps;
+                });
                 
                 leaderboardList.innerHTML = entries.map(([userId, data], index) => {
                     const rank = index + 1;
                     const isCurrentUser = this.isLoggedIn && this.currentUser && this.currentUser.工号 === userId;
                     const rankClass = rank <= 3 ? `rank-${rank}` : '';
                     const userClass = isCurrentUser ? 'current-user' : '';
+                    const timeText = typeof data.timeMs === 'number' ? this.formatMs(data.timeMs) + 's' : '—';
+                    const stepsVal = typeof data.steps === 'number' ? data.steps : (typeof data.score === 'number' ? data.score : '—');
                     
                     return `
                         <div class="leaderboard-item ${rankClass} ${userClass}">
                             <div class="leaderboard-rank">${rank}</div>
                             <div class="leaderboard-user">${data.name} (${userId})</div>
-                            <div class="leaderboard-score">${data.score}步</div>
+                            <div class="leaderboard-score">⏱️ ${timeText}｜🪜 ${stepsVal}步</div>
                         </div>
                     `;
                 }).join('');
+            }
+
+            // 计时相关方法
+            startTimerIfNeeded() {
+                if (this.hasStarted) return;
+                this.hasStarted = true;
+                this.timerStartMs = Date.now();
+                // 清理可能存在的旧定时器
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+                this.timerInterval = setInterval(() => {
+                    this.elapsedMs = Date.now() - this.timerStartMs;
+                    const el = document.getElementById('elapsedTime');
+                    if (el) el.textContent = this.formatMs(this.elapsedMs);
+                }, 50);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+                if (this.hasStarted && this.timerStartMs != null) {
+                    this.elapsedMs = Date.now() - this.timerStartMs;
+                }
+            }
+
+            resetTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+                this.hasStarted = false;
+                this.timerStartMs = null;
+                this.elapsedMs = 0;
+                const el = document.getElementById('elapsedTime');
+                if (el) el.textContent = '0.00';
+            }
+
+            formatMs(ms) {
+                if (!ms || ms < 0) return '0.00';
+                const totalSeconds = ms / 1000;
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = Math.floor(totalSeconds % 60);
+                const centis = Math.floor((ms % 1000) / 10);
+                const mm = String(minutes).padStart(2, '0');
+                const ss = String(seconds).padStart(2, '0');
+                const cc = String(centis).padStart(2, '0');
+                return `${mm}:${ss}.${cc}`;
             }
         }
 
