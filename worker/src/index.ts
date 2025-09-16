@@ -33,14 +33,27 @@ export default {
 
     if (url.pathname === "/leaderboard" && req.method === "GET") {
       const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 100);
-      const cacheKey = `leaderboard:top:${limit}`;
+      const cacheKey = `leaderboard:top:${limit}:best_per_user:v2`;
       const cached = await env.CACHE.get(cacheKey, "json");
       if (cached) return json(cached, origin);
 
+      // 每个用户仅保留最佳一条（步数升序、时间升序、时间早者优先），并返回该用户的总尝试次数
       const { results } = await env.DB.prepare(
-        `SELECT nickname, moves, time_ms AS timeMs, created_at AS createdAt
-         FROM scores
-         ORDER BY moves ASC, time_ms ASC, created_at ASC
+        `WITH ranked AS (
+           SELECT 
+             s.user_id AS userId,
+             s.nickname AS nickname,
+             s.moves AS moves,
+             s.time_ms AS timeMs,
+             s.created_at AS createdAt,
+             ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.moves ASC, s.time_ms ASC, s.created_at ASC) AS rn,
+             COUNT(*) OVER (PARTITION BY s.user_id) AS attemptsCount
+           FROM scores s
+         )
+         SELECT userId, nickname, moves, timeMs, createdAt, attemptsCount
+         FROM ranked
+         WHERE rn = 1
+         ORDER BY moves ASC, timeMs ASC, createdAt ASC
          LIMIT ?`
       )
         .bind(limit)

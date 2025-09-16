@@ -1361,19 +1361,29 @@
                     leaderboardList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">暂无排行榜数据</p>';
                     return;
                 }
-                const html = list.map((row, index) => {
+                // 去重：即使后端意外返回重复 userId，也只保留一条最佳
+                const seen = new Set();
+                const deduped = [];
+                for (const row of list) {
+                    const key = row.userId || row.nickname;
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    deduped.push(row);
+                }
+                const html = deduped.map((row, index) => {
                     const rank = index + 1;
                     const rankClass = rank <= 3 ? `rank-${rank}` : '';
                     const isCurrentUser = this.isLoggedIn && this.currentUser && row && row.nickname && (this.currentUser.姓名 === row.nickname);
                     const userClass = isCurrentUser ? 'current-user' : '';
                     const timeText = typeof row.timeMs === 'number' ? this.formatMs(row.timeMs) : '—';
                     const stepsVal = typeof row.moves === 'number' ? row.moves : '—';
+                    const remaining = typeof row.attemptsCount === 'number' ? Math.max(0, this.maxAttempts - row.attemptsCount) : '—';
                     const createdAt = row.createdAt ? new Date(row.createdAt).toLocaleString() : '';
                     return `
                         <div class="leaderboard-item ${rankClass} ${userClass}">
                             <div class="leaderboard-rank">${rank}</div>
                             <div class="leaderboard-user">${row.nickname || ''}</div>
-                            <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步 ${createdAt ? '｜' + createdAt : ''}</div>
+                            <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步｜余${remaining} ${createdAt ? '｜' + createdAt : ''}</div>
                         </div>
                     `;
                 }).join('');
