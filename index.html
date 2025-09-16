@@ -1115,15 +1115,14 @@
             }
 
             async beginAttemptIfAllowed() {
-                // Reload latest to avoid race
-                await this.loadLeaderboardFromGist();
+                // Worker-only 模式：本地更新尝试计数即可（无需远端持久化）
                 const users = this.ensureUsers();
                 const userId = this.currentUser.工号;
                 const name = this.currentUser.姓名;
                 const now = new Date().toISOString();
                 const node = users[userId] || { name, attemptsCount: 0, attempts: [], best: null };
 
-                // If last attempt is started but not completed, mark as abandoned
+                // 将未完成的上次尝试标记为放弃
                 const last = node.attempts && node.attempts[0];
                 if (last && last.status === 'started' && !last.completedAt) {
                     last.status = 'abandoned';
@@ -1142,14 +1141,6 @@
                 users[userId] = node;
                 this.leaderboard.users = users;
 
-                // Persist before allowing play
-                await this.saveLeaderboardToGist();
-
-                // 轻量一致性重检：短暂延时后再拉一次，确认已写入
-                try {
-                    await new Promise(r => setTimeout(r, 200));
-                    await this.loadLeaderboardFromGist();
-                } catch (_) {}
                 this.currentAttemptId = attemptId;
                 this.updateRemainingAttemptsUI();
                 return true;
