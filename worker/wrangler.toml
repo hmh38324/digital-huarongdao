@@ -1,0 +1,26 @@
+name = "hl-worker"
+main = "src/index.ts"
+compatibility_date = "2025-09-16"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hl_leaderboard"
+# 部署后使用 `wrangler d1 list` 查到真实 ID 并替换
+database_id = "REPLACE_ME_D1_ID"
+
+[[kv_namespaces]]
+binding = "CACHE"
+# 创建后填入 KV 命名空间 ID
+id = "REPLACE_ME_KV_ID"
+
+[vars]
+# 将其设置为你的前端域名（如 Cloudflare Pages 自定义域）
+ALLOWED_ORIGIN = "*"
+
+[routes]
+# 可选：如果绑定到自定义域，在这里配置路由
+# [[routes]]
+# pattern = "api.example.com/*"
+# zone_name = "example.com"
+
+

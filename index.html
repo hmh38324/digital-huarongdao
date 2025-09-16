@@ -656,6 +656,8 @@
     </div>
 
     <script>
+        // Cloudflare Worker API 基础地址（部署后替换）
+        const WORKER_BASE_URL = 'https://REPLACE_WITH_YOUR_WORKER_DOMAIN';
         class PuzzleGame {
             constructor() {
                 this.pieces = [];
@@ -1165,25 +1167,45 @@
                 }
                 
                 const userId = this.currentUser.工号;
+                const nickname = this.currentUser.姓名;
+                const moves = this.moveCount;
+                const timeMs = this.elapsedMs;
+                
+                // 优先提交到 Cloudflare Worker
+                if (WORKER_BASE_URL && WORKER_BASE_URL.startsWith('http')) {
+                    try {
+                        await fetch(`${WORKER_BASE_URL}/submit`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({ userId, nickname, moves, timeMs })
+                        });
+                    } catch (e) {
+                        console.warn('提交到 Worker 失败，退回 Gist：', e);
+                        await this.updateLeaderboardViaGist();
+                        return;
+                    }
+                    // 本地尝试记录与剩余次数更新仍保留
+                    const newRecord = { name: nickname, timeMs, steps: moves, timestamp: new Date().toISOString() };
+                    this.completeAttempt(newRecord);
+                    this.updateRemainingAttemptsUI();
+                    return;
+                }
+                
+                // 回退：使用 Gist 保存
+                await this.updateLeaderboardViaGist();
+            }
+
+            async updateLeaderboardViaGist() {
+                const userId = this.currentUser.工号;
                 const users = this.ensureUsers();
                 const userNode = users[userId] || { name: this.currentUser.姓名, attemptsCount: 0, attempts: [], best: null };
                 const currentBest = userNode.best;
-                
-                console.log('当前用户信息', {
-                    userId,
-                    currentBest,
-                    moveCount: this.moveCount,
-                    elapsedMs: this.elapsedMs
-                });
-                
-                // 评价规则：先比时间（更短更好），时间相同再比步数（更少更好）
                 const newRecord = {
-                        name: this.currentUser.姓名,
+                    name: this.currentUser.姓名,
                     timeMs: this.elapsedMs,
                     steps: this.moveCount,
-                        timestamp: new Date().toISOString()
-                    };
-
+                    timestamp: new Date().toISOString()
+                };
                 const isBetter = () => {
                     if (!currentBest) return true;
                     const bestTime = typeof currentBest.timeMs === 'number' ? currentBest.timeMs : Infinity;
@@ -1192,8 +1214,6 @@
                     if (newRecord.timeMs > bestTime) return false;
                     return newRecord.steps < bestSteps;
                 };
-
-                // 完成本次尝试并更新best
                 this.completeAttempt(newRecord);
                 if (isBetter()) {
                     userNode.best = { timeMs: newRecord.timeMs, steps: newRecord.steps, timestamp: newRecord.timestamp };
@@ -1211,7 +1231,20 @@
                 const leaderboardList = document.getElementById('leaderboardList');
                 leaderboardList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">🔄 正在加载最新数据...</p>';
                 
-                // 从Gist拉取最新数据
+                // 优先从 Worker 读取
+                if (WORKER_BASE_URL && WORKER_BASE_URL.startsWith('http')) {
+                    try {
+                        const resp = await fetch(`${WORKER_BASE_URL}/leaderboard?limit=50`, { method: 'GET' });
+                        if (resp.ok) {
+                            const list = await resp.json();
+                            this.renderLeaderboardFromWorker(list);
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('从 Worker 拉取失败，退回 Gist：', e);
+                    }
+                }
+                // 回退：从 Gist 拉取
                 await this.loadLeaderboardFromGist();
                 this.renderLeaderboard();
             }
@@ -1549,6 +1582,36 @@
         window.addEventListener('load', () => {
             game = new PuzzleGame();
         });
+
+        // ====== 渲染 Worker 返回的排行榜（独立于 Gist 结构） ======
+        PuzzleGame.prototype.renderLeaderboardFromWorker = function(list) {
+            try {
+                const leaderboardList = document.getElementById('leaderboardList');
+                if (!Array.isArray(list) || list.length === 0) {
+                    leaderboardList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">暂无排行榜数据</p>';
+                    return;
+                }
+                const html = list.map((row, index) => {
+                    const rank = index + 1;
+                    const rankClass = rank <= 3 ? `rank-${rank}` : '';
+                    const isCurrentUser = this.isLoggedIn && this.currentUser && row && row.nickname && (this.currentUser.姓名 === row.nickname);
+                    const userClass = isCurrentUser ? 'current-user' : '';
+                    const timeText = typeof row.timeMs === 'number' ? this.formatMs(row.timeMs) : '—';
+                    const stepsVal = typeof row.moves === 'number' ? row.moves : '—';
+                    const createdAt = row.createdAt ? new Date(row.createdAt).toLocaleString() : '';
+                    return `
+                        <div class="leaderboard-item ${rankClass} ${userClass}">
+                            <div class="leaderboard-rank">${rank}</div>
+                            <div class="leaderboard-user">${row.nickname || ''}</div>
+                            <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步 ${createdAt ? '｜' + createdAt : ''}</div>
+                        </div>
+                    `;
+                }).join('');
+                leaderboardList.innerHTML = html;
+            } catch (e) {
+                console.error('渲染 Worker 排行榜失败:', e);
+            }
+        }
     </script>
 </body>
 </html>
