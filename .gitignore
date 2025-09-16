@@ -1,3 +1,15 @@
+# Cloudflare Wrangler local state (do not commit)
+worker/.wrangler/
+
+# SQLite artifacts
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+
+# OS/editor
+.DS_Store
+Thumbs.db
+
 # 敏感配置文件
 config.js
 
