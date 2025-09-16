@@ -20,6 +20,7 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     const origin = env.ALLOWED_ORIGIN || "*";
+    const MAX_ATTEMPTS = 3;
 
     if (req.method === "OPTIONS") {
       return new Response(null, {
@@ -33,12 +34,12 @@ export default {
 
     if (url.pathname === "/leaderboard" && req.method === "GET") {
       const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 100);
-      const cacheKey = `leaderboard:top:${limit}:best_per_user:v2`;
+      // 不缓存 attemptsCount（需要实时），仅缓存 D1 排序结果
+      const cacheKey = `leaderboard:top:${limit}:best_per_user:v2:d1`;
       const cached = await env.CACHE.get(cacheKey, "json");
-      if (cached) return json(cached, origin);
 
-      // 每个用户仅保留最佳一条（步数升序、时间升序、时间早者优先），并返回该用户的总尝试次数
-      const { results } = await env.DB.prepare(
+      // 每个用户仅保留最佳一条（步数升序、时间升序、时间早者优先）
+      const { results: d1Rows } = await env.DB.prepare(
         `WITH ranked AS (
            SELECT 
              s.user_id AS userId,
@@ -47,10 +48,10 @@ export default {
              s.time_ms AS timeMs,
              s.created_at AS createdAt,
              ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.moves ASC, s.time_ms ASC, s.created_at ASC) AS rn,
-             COUNT(*) OVER (PARTITION BY s.user_id) AS attemptsCount
+             COUNT(*) OVER (PARTITION BY s.user_id) AS completedCount
            FROM scores s
          )
-         SELECT userId, nickname, moves, timeMs, createdAt, attemptsCount
+         SELECT userId, nickname, moves, timeMs, createdAt, completedCount
          FROM ranked
          WHERE rn = 1
          ORDER BY moves ASC, timeMs ASC, createdAt ASC
@@ -59,8 +60,39 @@ export default {
         .bind(limit)
         .all();
 
-      env.CACHE.put(cacheKey, JSON.stringify(results), { expirationTtl: 30 }).catch(() => {});
-      return json(results, origin);
+      if (!cached) {
+        env.CACHE.put(cacheKey, JSON.stringify(d1Rows), { expirationTtl: 30 }).catch(() => {});
+      }
+
+      // 合并 KV 中的 attemptsCount（开始次数），若不存在则回退为 completedCount
+      const withAttempts = await Promise.all(
+        (cached || d1Rows).map(async (row: any) => {
+          const key = `attempts:${row.userId}`;
+          const raw = await env.CACHE.get(key);
+          const attemptsCount = raw ? parseInt(raw, 10) : row.completedCount || 0;
+          return { ...row, attemptsCount };
+        })
+      );
+      return json(withAttempts, origin);
+    }
+
+    // 开始一次尝试：增加 KV 计数并返回 attemptsCount
+    if (url.pathname === "/begin" && req.method === "POST") {
+      const body = await req.json().catch(() => null);
+      if (!body) return json({ error: "Invalid JSON" }, origin, 400);
+      const { userId, nickname } = body as { userId?: string; nickname?: string };
+      if (!userId || !nickname) return json({ error: "Missing fields" }, origin, 400);
+
+      const key = `attempts:${userId}`;
+      const raw = await env.CACHE.get(key);
+      let attempts = raw ? parseInt(raw, 10) : 0;
+      if (Number.isNaN(attempts) || attempts < 0) attempts = 0;
+      if (attempts >= MAX_ATTEMPTS) {
+        return json({ ok: false, attemptsCount: attempts, reason: "limit" }, origin, 403);
+      }
+      attempts += 1;
+      await env.CACHE.put(key, String(attempts));
+      return json({ ok: true, attemptsCount: attempts }, origin, 200);
     }
 
     if (url.pathname === "/submit" && req.method === "POST") {

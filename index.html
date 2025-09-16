@@ -1115,35 +1115,30 @@
             }
 
             async beginAttemptIfAllowed() {
-                // Worker-only 模式：本地更新尝试计数即可（无需远端持久化）
-                const users = this.ensureUsers();
                 const userId = this.currentUser.工号;
-                const name = this.currentUser.姓名;
-                const now = new Date().toISOString();
-                const node = users[userId] || { name, attemptsCount: 0, attempts: [], best: null };
-
-                // 将未完成的上次尝试标记为放弃
-                const last = node.attempts && node.attempts[0];
-                if (last && last.status === 'started' && !last.completedAt) {
-                    last.status = 'abandoned';
-                }
-
-                if (node.attemptsCount >= this.maxAttempts) {
-                    alert('本用户可用次数已用完（最多3次）。');
+                const nickname = this.currentUser.姓名;
+                try {
+                    const resp = await fetch(`${WORKER_BASE_URL}/begin`, {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({ userId, nickname })
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    if (!resp.ok || !data.ok) {
+                        alert('本用户可用次数已用完（最多3次）。');
+                        return false;
+                    }
+                    const el = document.getElementById('remainingAttempts');
+                    if (el && typeof data.attemptsCount === 'number') {
+                        el.textContent = String(Math.max(0, this.maxAttempts - data.attemptsCount));
+                    }
+                    this.currentAttemptId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                    return true;
+                } catch (e) {
+                    console.warn('调用 /begin 失败', e);
+                    alert('网络异常，请稍后重试');
                     return false;
                 }
-
-                const attemptId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-                const attempt = { id: attemptId, startedAt: now, status: 'started' };
-                node.attempts = [attempt, ...(node.attempts || [])];
-                node.attemptsCount = (node.attemptsCount || 0) + 1;
-                node.name = name;
-                users[userId] = node;
-                this.leaderboard.users = users;
-
-                this.currentAttemptId = attemptId;
-                this.updateRemainingAttemptsUI();
-                return true;
             }
 
             completeAttempt(result) {
@@ -1378,11 +1373,6 @@
                     const timeText = typeof row.timeMs === 'number' ? this.formatMs(row.timeMs) : '—';
                     const stepsVal = typeof row.moves === 'number' ? row.moves : '—';
                     const remaining = typeof row.attemptsCount === 'number' ? Math.max(0, this.maxAttempts - row.attemptsCount) : '—';
-                    // 同步当前用户的“剩余次数”到主界面
-                    if (isCurrentUser && typeof row.attemptsCount === 'number') {
-                        const el = document.getElementById('remainingAttempts');
-                        if (el) el.textContent = String(remaining);
-                    }
                     return `
                         <div class="leaderboard-item ${rankClass} ${userClass}">
                             <div class="leaderboard-rank">${rank}</div>
