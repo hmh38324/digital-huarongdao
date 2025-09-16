@@ -1378,12 +1378,16 @@
                     const timeText = typeof row.timeMs === 'number' ? this.formatMs(row.timeMs) : '—';
                     const stepsVal = typeof row.moves === 'number' ? row.moves : '—';
                     const remaining = typeof row.attemptsCount === 'number' ? Math.max(0, this.maxAttempts - row.attemptsCount) : '—';
-                    const createdAt = row.createdAt ? new Date(row.createdAt).toLocaleString() : '';
+                    // 同步当前用户的“剩余次数”到主界面
+                    if (isCurrentUser && typeof row.attemptsCount === 'number') {
+                        const el = document.getElementById('remainingAttempts');
+                        if (el) el.textContent = String(remaining);
+                    }
                     return `
                         <div class="leaderboard-item ${rankClass} ${userClass}">
                             <div class="leaderboard-rank">${rank}</div>
                             <div class="leaderboard-user">${row.nickname || ''}</div>
-                            <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步｜余${remaining} ${createdAt ? '｜' + createdAt : ''}</div>
+                            <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步｜余${remaining}</div>
                         </div>
                     `;
                 }).join('');
