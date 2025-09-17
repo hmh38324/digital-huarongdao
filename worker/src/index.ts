@@ -47,14 +47,14 @@ export default {
              s.moves AS moves,
              s.time_ms AS timeMs,
              s.created_at AS createdAt,
-             ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.moves ASC, s.time_ms ASC, s.created_at ASC) AS rn,
+             ROW_NUMBER() OVER (PARTITION BY s.user_id ORDER BY s.time_ms ASC, s.moves ASC, s.created_at ASC) AS rn,
              COUNT(*) OVER (PARTITION BY s.user_id) AS completedCount
            FROM scores s
          )
          SELECT userId, nickname, moves, timeMs, createdAt, completedCount
          FROM ranked
          WHERE rn = 1
-         ORDER BY moves ASC, timeMs ASC, createdAt ASC
+         ORDER BY timeMs ASC, moves ASC, createdAt ASC
          LIMIT ?`
       )
         .bind(limit)
@@ -76,6 +76,14 @@ export default {
       return json(withAttempts, origin);
     }
 
+    // 获取某用户的已开始尝试次数（用于登录后同步剩余次数）
+    if (url.pathname === "/attempts" && req.method === "GET") {
+      const userId = url.searchParams.get("userId");
+      if (!userId) return json({ error: "Missing userId" }, origin, 400);
+      const raw = await env.CACHE.get(`attempts:${userId}`);
+      const attemptsCount = raw ? parseInt(raw, 10) : 0;
+      return json({ attemptsCount }, origin);
+    }
     // 开始一次尝试：增加 KV 计数并返回 attemptsCount
     if (url.pathname === "/begin" && req.method === "POST") {
       const body = await req.json().catch(() => null);

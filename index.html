@@ -1264,6 +1264,17 @@
             if (game.login(employeeId, employeeName)) {
                 // 登录成功
                 errorElement.style.display = 'none';
+                // 登录后同步剩余次数
+                (async () => {
+                    try {
+                        const resp = await fetch(`${WORKER_BASE_URL}/attempts?userId=${encodeURIComponent(employeeId)}`);
+                        const data = await resp.json().catch(() => ({}));
+                        const el = document.getElementById('remainingAttempts');
+                        if (el && typeof data.attemptsCount === 'number') {
+                            el.textContent = String(Math.max(0, game.maxAttempts - data.attemptsCount));
+                        }
+                    } catch (_) {}
+                })();
             } else {
                 // 登录失败
                 errorElement.textContent = '工号或姓名输入错误';
@@ -1365,6 +1376,15 @@
                     seen.add(key);
                     deduped.push(row);
                 }
+                // 排序：时间升序，其次步数升序（与后端一致）
+                deduped.sort((a, b) => {
+                    const ta = typeof a.timeMs === 'number' ? a.timeMs : Infinity;
+                    const tb = typeof b.timeMs === 'number' ? b.timeMs : Infinity;
+                    if (ta !== tb) return ta - tb;
+                    const sa = typeof a.moves === 'number' ? a.moves : Infinity;
+                    const sb = typeof b.moves === 'number' ? b.moves : Infinity;
+                    return sa - sb;
+                });
                 const html = deduped.map((row, index) => {
                     const rank = index + 1;
                     const rankClass = rank <= 3 ? `rank-${rank}` : '';
