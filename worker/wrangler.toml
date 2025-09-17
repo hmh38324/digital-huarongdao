@@ -14,7 +14,7 @@ binding = "CACHE"
 id = "728c6d1b94e64ec694f51d08c5361ff6"
 
 [vars]
-# 将其设置为你的前端域名（如 Cloudflare Pages 自定义域）
-ALLOWED_ORIGIN = "https://liqunhuarongdao.biboran.top"
+# 允许的前端域名（逗号分隔）
+ALLOWED_ORIGINS = "https://liqunhuarongdao.biboran.top,https://digital-huarongdao.pages.dev"
 
 

@@ -1,7 +1,7 @@
 export interface Env {
   DB: D1Database;
   CACHE: KVNamespace;
-  ALLOWED_ORIGIN: string;
+  ALLOWED_ORIGINS: string; // comma-separated origins
 }
 
 const json = (data: unknown, origin: string, status = 200): Response =>
@@ -19,7 +19,9 @@ const json = (data: unknown, origin: string, status = 200): Response =>
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
-    const origin = env.ALLOWED_ORIGIN || "*";
+    const requestOrigin = req.headers.get("origin") || "";
+    const allowed = (env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean);
+    const origin = allowed.includes(requestOrigin) ? requestOrigin : allowed[0] || "*";
     const MAX_ATTEMPTS = 3;
 
     if (req.method === "OPTIONS") {
