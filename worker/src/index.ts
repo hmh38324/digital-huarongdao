@@ -66,16 +66,44 @@ export default {
         env.CACHE.put(cacheKey, JSON.stringify(d1Rows), { expirationTtl: 30 }).catch(() => {});
       }
 
-      // 合并 KV 中的 attemptsCount（开始次数），若不存在则回退为 completedCount
-      const withAttempts = await Promise.all(
-        (cached || d1Rows).map(async (row: any) => {
-          const key = `attempts:${row.userId}`;
-          const raw = await env.CACHE.get(key);
-          const attemptsCount = raw ? parseInt(raw, 10) : row.completedCount || 0;
-          return { ...row, attemptsCount };
-        })
-      );
-      return json(withAttempts, origin);
+      const baseRows: any[] = cached || d1Rows;
+
+      // 读取 KV 中所有已开始的用户，key 前缀 attempts:
+      const kvKeys = await env.CACHE.list({ prefix: "attempts:" });
+      const kvRows: any[] = [];
+      for (const k of kvKeys.keys) {
+        const raw = await env.CACHE.get(k.name);
+        if (!raw) continue;
+        let attemptsCount = 0;
+        let nickname: string | undefined = undefined;
+        try {
+          const obj = JSON.parse(raw as any);
+          attemptsCount = typeof obj.attemptsCount === "number" ? obj.attemptsCount : parseInt(String(obj.attemptsCount || 0), 10);
+          nickname = obj.nickname;
+        } catch {
+          attemptsCount = parseInt(raw, 10) || 0;
+        }
+        const userId = k.name.replace(/^attempts:/, "");
+        kvRows.push({ userId, nickname, attemptsCount });
+      }
+
+      // 合并：若 D1 有记录，用其最佳成绩，并用 KV 的 attemptsCount 覆盖；
+      // 若 KV 有但 D1 没有，补充一条仅含 attemptsCount 的记录。
+      const byId = new Map<string, any>();
+      for (const r of baseRows) byId.set(r.userId, { ...r, attemptsCount: r.completedCount || r.attemptsCount || 0 });
+      for (const r of kvRows) {
+        if (byId.has(r.userId)) {
+          const cur = byId.get(r.userId);
+          cur.attemptsCount = r.attemptsCount;
+          if (!cur.nickname && r.nickname) cur.nickname = r.nickname;
+          byId.set(r.userId, cur);
+        } else {
+          byId.set(r.userId, { userId: r.userId, nickname: r.nickname, attemptsCount: r.attemptsCount });
+        }
+      }
+
+      const merged = Array.from(byId.values());
+      return json(merged, origin);
     }
 
     // 获取某用户的已开始尝试次数（用于登录后同步剩余次数）
@@ -95,13 +123,20 @@ export default {
 
       const key = `attempts:${userId}`;
       const raw = await env.CACHE.get(key);
-      let attempts = raw ? parseInt(raw, 10) : 0;
-      if (Number.isNaN(attempts) || attempts < 0) attempts = 0;
+      let attempts = 0;
+      if (raw) {
+        try {
+          const obj = JSON.parse(raw as any);
+          attempts = typeof obj.attemptsCount === "number" ? obj.attemptsCount : parseInt(String(obj.attemptsCount || 0), 10);
+        } catch {
+          attempts = parseInt(raw, 10) || 0;
+        }
+      }
       if (attempts >= MAX_ATTEMPTS) {
         return json({ ok: false, attemptsCount: attempts, reason: "limit" }, origin, 403);
       }
       attempts += 1;
-      await env.CACHE.put(key, String(attempts));
+      await env.CACHE.put(key, JSON.stringify({ attemptsCount: attempts, nickname }));
       return json({ ok: true, attemptsCount: attempts }, origin, 200);
     }
 

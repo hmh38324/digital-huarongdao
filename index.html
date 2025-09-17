@@ -1396,7 +1396,7 @@
                     return `
                         <div class="leaderboard-item ${rankClass} ${userClass}">
                             <div class="leaderboard-rank">${rank}</div>
-                            <div class="leaderboard-user">${row.nickname || ''}</div>
+                            <div class="leaderboard-user">${row.nickname || row.userId || ''}</div>
                             <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步｜余${remaining}</div>
                         </div>
                     `;
