@@ -1,7 +1,7 @@
 export interface Env {
   DB: D1Database;
   CACHE: KVNamespace;
-  ALLOWED_ORIGINS: string; // comma-separated origins
+     ALLOWED_ORIGINS: string; // comma-separated origins
 }
 
 const json = (data: unknown, origin: string, status = 200): Response =>
