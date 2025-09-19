@@ -1548,7 +1548,8 @@
                     const rankClass = rank <= 3 ? `rank-${rank}` : '';
                     const isCurrentUser = this.isLoggedIn && this.currentUser && row && row.nickname && (this.currentUser.姓名 === row.nickname);
                     const userClass = isCurrentUser ? 'current-user' : '';
-                    const timeText = typeof row.timeMs === 'number' ? this.formatMs(row.timeMs) : '—';
+                    const t = Number(row.timeMs);
+                    const timeText = Number.isFinite(t) && t > 0 ? this.formatMs(t) : '—';
                     const stepsVal = typeof row.moves === 'number' ? row.moves : '—';
                     const remaining = typeof row.attemptsCount === 'number' ? Math.max(0, this.maxAttempts - row.attemptsCount) : '—';
                     return `
@@ -1565,15 +1566,17 @@
                 try {
                     const user = this.currentUser;
                     if (user && user.工号) {
-                        const me = deduped.find(r => String(r.userId) === String(user.工号) || String(r.nickname) === String(user.姓名));
+                        const myIndex = deduped.findIndex(r => String(r.userId) === String(user.工号) || String(r.nickname) === String(user.姓名));
+                        const me = myIndex >= 0 ? deduped[myIndex] : null;
                         if (me) {
-                            const timeText = typeof me.timeMs === 'number' ? this.formatMs(me.timeMs) : '—';
+                            const t2 = Number(me.timeMs);
+                            const timeText = Number.isFinite(t2) && t2 > 0 ? this.formatMs(t2) : '—';
                             const stepsVal = typeof me.moves === 'number' ? me.moves : '—';
                             const remaining = typeof me.attemptsCount === 'number' ? Math.max(0, this.maxAttempts - me.attemptsCount) : '—';
                             currentBar.style.display = 'block';
                             currentBar.innerHTML = `
                                 <div class="leaderboard-item current-user" style="margin:0">
-                                    <div class="leaderboard-rank">我</div>
+                                    <div class="leaderboard-rank">${myIndex + 1}</div>
                                     <div class="leaderboard-user">${me.nickname || user.姓名} (${user.工号})</div>
                                     <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步｜余${remaining}</div>
                                 </div>
