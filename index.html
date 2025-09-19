@@ -622,7 +622,7 @@
                 <h3 style="margin-top:16px">编辑用户</h3>
                 <div class="form-group"><label>工号</label><input id="admUserId"></div>
                 <div class="form-group"><label>姓名</label><input id="admNickname"></div>
-                <div class="form-group"><label>时间(ms)</label><input id="admTime" type="number" min="0"></div>
+                <div class="form-group"><label>时间(ms 或 mm:ss)</label><input id="admTime" type="text"></div>
                 <div class="form-group"><label>步数</label><input id="admMoves" type="number" min="0"></div>
                 <div class="form-group"><label>已用次数</label><input id="admAttempts" type="number" min="0"></div>
                 <div class="form-buttons" style="justify-content:flex-start;gap:8px;">
@@ -1397,6 +1397,27 @@
                 URL.revokeObjectURL(url);
             } catch (e) { alert('导出失败'); }
         }
+        function parseTimeInputToMs(raw) {
+            const v = String(raw || '').trim();
+            if (!v) return undefined;
+            if (v.includes(':')) {
+                const parts = v.split(':').map(p => parseInt(p, 10) || 0);
+                // support mm:ss or hh:mm:ss
+                let ms = 0;
+                if (parts.length === 2) {
+                    const [mm, ss] = parts;
+                    ms = (mm * 60 + ss) * 1000;
+                } else if (parts.length === 3) {
+                    const [hh, mm, ss] = parts;
+                    ms = ((hh * 60 + mm) * 60 + ss) * 1000;
+                }
+                return ms;
+            }
+            // pure number: treat as seconds if < 1000, otherwise ms
+            const n = parseInt(v, 10);
+            if (!Number.isFinite(n)) return undefined;
+            return n < 1000 ? n * 1000 : n;
+        }
         async function adminEditUser() {
             const userId = document.getElementById('admUserId').value.trim();
             if (!userId) { alert('工号必填'); return; }
@@ -1404,7 +1425,7 @@
                 password: '1314520',
                 userId,
                 nickname: document.getElementById('admNickname').value.trim() || undefined,
-                timeMs: parseInt(document.getElementById('admTime').value, 10) || undefined,
+                timeMs: parseTimeInputToMs(document.getElementById('admTime').value),
                 moves: parseInt(document.getElementById('admMoves').value, 10) || undefined,
                 attemptsCount: parseInt(document.getElementById('admAttempts').value, 10)
             };
