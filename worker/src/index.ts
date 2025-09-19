@@ -221,9 +221,11 @@ export default {
         await env.CACHE.put(`attempts:${userId}`, JSON.stringify({ attemptsCount, nickname }), { expirationTtl: undefined }).catch(() => {});
       }
 
-      // Insert a score row if both moves and timeMs provided as positive integers
+      // Replace user's score: delete existing rows then insert a new one
       if (Number.isInteger(moves) && Number.isInteger(timeMs) && (moves as number) > 0 && (timeMs as number) > 0) {
         const createdAt = Date.now();
+        // delete old scores for this user to avoid stale 0ms records winning the ranking
+        await env.DB.prepare(`DELETE FROM scores WHERE user_id = ?`).bind(userId).run().catch(() => {});
         await env.DB.prepare(
           `INSERT INTO scores (user_id, nickname, moves, time_ms, created_at) VALUES (?, ?, ?, ?, ?)`
         ).bind(userId, nickname || null, moves, timeMs, createdAt).run().catch(() => {});
