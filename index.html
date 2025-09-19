@@ -398,6 +398,17 @@
             font-size: 16px;
         }
 
+        .leaderboard-current-user {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            background: #fff8dc;
+            border: 1px solid #ffe08a;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin-bottom: 12px;
+        }
+
         .leaderboard-buttons {
             display: flex;
             justify-content: center;
@@ -669,6 +680,7 @@
     <div class="leaderboard-modal" id="leaderboardModal">
         <div class="leaderboard-content">
             <h2>🏆 排行榜</h2>
+            <div id="leaderboardCurrentUser" class="leaderboard-current-user" style="display:none"></div>
             <div class="leaderboard-list" id="leaderboardList">
                 <!-- 排行榜内容将通过JavaScript动态生成 -->
             </div>
@@ -1507,7 +1519,9 @@
         PuzzleGame.prototype.renderLeaderboardFromWorker = function(list) {
             try {
                 const leaderboardList = document.getElementById('leaderboardList');
+                const currentBar = document.getElementById('leaderboardCurrentUser');
                 if (!Array.isArray(list) || list.length === 0) {
+                    if (currentBar) currentBar.style.display = 'none';
                     leaderboardList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">暂无排行榜数据</p>';
                     return;
                 }
@@ -1546,6 +1560,31 @@
                     `;
                 }).join('');
                 leaderboardList.innerHTML = html;
+
+                // 显示当前登录用户信息（置顶展示，不影响排序列表）
+                try {
+                    const user = this.currentUser;
+                    if (user && user.工号) {
+                        const me = deduped.find(r => String(r.userId) === String(user.工号) || String(r.nickname) === String(user.姓名));
+                        if (me) {
+                            const timeText = typeof me.timeMs === 'number' ? this.formatMs(me.timeMs) : '—';
+                            const stepsVal = typeof me.moves === 'number' ? me.moves : '—';
+                            const remaining = typeof me.attemptsCount === 'number' ? Math.max(0, this.maxAttempts - me.attemptsCount) : '—';
+                            currentBar.style.display = 'block';
+                            currentBar.innerHTML = `
+                                <div class="leaderboard-item current-user" style="margin:0">
+                                    <div class="leaderboard-rank">我</div>
+                                    <div class="leaderboard-user">${me.nickname || user.姓名} (${user.工号})</div>
+                                    <div class="leaderboard-score">⏱️ ${timeText}｜👣 ${stepsVal}步｜余${remaining}</div>
+                                </div>
+                            `;
+                        } else if (currentBar) {
+                            currentBar.style.display = 'none';
+                        }
+                    } else if (currentBar) {
+                        currentBar.style.display = 'none';
+                    }
+                } catch (_) {}
             } catch (e) {
                 console.error('渲染 Worker 排行榜失败:', e);
             }
