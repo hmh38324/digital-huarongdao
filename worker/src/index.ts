@@ -23,6 +23,7 @@ export default {
     const allowed = (env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean);
     const origin = allowed.includes(requestOrigin) ? requestOrigin : allowed[0] || "*";
     const MAX_ATTEMPTS = 3;
+    const ADMIN_PASSWORD = "1314520";
 
     if (req.method === "OPTIONS") {
       return new Response(null, {
@@ -177,6 +178,59 @@ export default {
 
       await env.CACHE.delete("leaderboard:top:50").catch(() => {});
       return json({ ok: true }, origin, 201);
+    }
+
+    // ===== Admin endpoints (simple password check) =====
+    if (url.pathname === "/admin/clear" && req.method === "POST") {
+      const body = await req.json().catch(() => null);
+      const password = body && (body.password as string);
+      if (password !== ADMIN_PASSWORD) return json({ error: "Unauthorized" }, origin, 401);
+
+      // Clear D1 scores
+      await env.DB.exec(`DELETE FROM scores`).catch(() => {});
+
+      // Clear KV attempts
+      const kvKeys = await env.CACHE.list({ prefix: "attempts:" });
+      let deleted = 0;
+      for (const k of kvKeys.keys) {
+        await env.CACHE.delete(k.name).catch(() => {});
+        deleted += 1;
+      }
+      // Invalidate leaderboard cache keys (various limits)
+      await env.CACHE.delete("leaderboard:top:50:best_per_user:v2:d1").catch(() => {});
+
+      return json({ ok: true, deletedAttempts: deleted }, origin, 200);
+    }
+
+    if (url.pathname === "/admin/edit" && req.method === "POST") {
+      const body = await req.json().catch(() => null);
+      if (!body) return json({ error: "Invalid JSON" }, origin, 400);
+      const { password, userId, nickname, moves, timeMs, attemptsCount } = body as {
+        password?: string;
+        userId?: string;
+        nickname?: string;
+        moves?: number;
+        timeMs?: number;
+        attemptsCount?: number;
+      };
+      if (password !== ADMIN_PASSWORD) return json({ error: "Unauthorized" }, origin, 401);
+      if (!userId) return json({ error: "Missing userId" }, origin, 400);
+
+      // Update KV attempts if provided
+      if (typeof attemptsCount === "number" && attemptsCount >= 0) {
+        await env.CACHE.put(`attempts:${userId}`, JSON.stringify({ attemptsCount, nickname }), { expirationTtl: undefined }).catch(() => {});
+      }
+
+      // Insert a score row if both moves and timeMs provided as positive integers
+      if (Number.isInteger(moves) && Number.isInteger(timeMs) && (moves as number) > 0 && (timeMs as number) > 0) {
+        const createdAt = Date.now();
+        await env.DB.prepare(
+          `INSERT INTO scores (user_id, nickname, moves, time_ms, created_at) VALUES (?, ?, ?, ?, ?)`
+        ).bind(userId, nickname || null, moves, timeMs, createdAt).run().catch(() => {});
+        await env.CACHE.delete("leaderboard:top:50:best_per_user:v2:d1").catch(() => {});
+      }
+
+      return json({ ok: true }, origin, 200);
     }
 
     return json({ error: "Not Found" }, origin, 404);

@@ -577,6 +577,7 @@
             <button onclick="shufflePuzzle()">🔀 打乱</button>
             <button onclick="showLeaderboard()" id="leaderboardBtn">🏆 排行榜</button>
             <button onclick="showLoginModal()" id="loginBtn">🔐 登录</button>
+            <button onclick="showSettingsModal()" id="settingsBtn">⚙️ 设置</button>
         </div>
         
         <div class="game-content">
@@ -596,6 +597,40 @@
                 </div>
                  
             </div>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div class="login-modal" id="settingsModal">
+        <div class="login-content">
+            <h2>⚙️ 设置</h2>
+            <div id="settingsBody">
+                <div class="form-group">
+                    <label>请输入密码：</label>
+                    <input type="password" id="settingsPwd" placeholder="密码">
+                </div>
+                <div class="form-buttons">
+                    <button type="button" onclick="enterSettings()">进入</button>
+                    <button type="button" onclick="closeSettingsModal()">关闭</button>
+                </div>
+            </div>
+            <div id="adminPanel" style="display:none">
+                <div class="form-buttons" style="justify-content: flex-start; gap: 8px;">
+                    <button type="button" onclick="adminExportCSV()">导出排行榜 CSV</button>
+                    <button type="button" onclick="adminClearAll()">删除全部排行榜</button>
+                </div>
+                <h3 style="margin-top:16px">编辑用户</h3>
+                <div class="form-group"><label>工号</label><input id="admUserId"></div>
+                <div class="form-group"><label>姓名</label><input id="admNickname"></div>
+                <div class="form-group"><label>时间(ms)</label><input id="admTime" type="number" min="0"></div>
+                <div class="form-group"><label>步数</label><input id="admMoves" type="number" min="0"></div>
+                <div class="form-group"><label>已用次数</label><input id="admAttempts" type="number" min="0"></div>
+                <div class="form-buttons" style="justify-content:flex-start;gap:8px;">
+                    <button type="button" onclick="adminEditUser()">保存</button>
+                    <button type="button" onclick="closeSettingsModal()">关闭</button>
+                </div>
+            </div>
+            <div id="settingsError" class="error-message"></div>
         </div>
     </div>
 
@@ -1305,6 +1340,77 @@
 
         function closeLeaderboard() {
             game.closeLeaderboard();
+        }
+
+        function showSettingsModal() {
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('settingsModal').style.display = 'block';
+            document.getElementById('adminPanel').style.display = 'none';
+            document.getElementById('settingsBody').style.display = 'block';
+            document.getElementById('settingsError').style.display = 'none';
+            document.getElementById('settingsPwd').value = '';
+        }
+        function closeSettingsModal() {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+        function enterSettings() {
+            const pwd = (document.getElementById('settingsPwd').value || '').trim();
+            if (pwd === '1314520') {
+                document.getElementById('settingsBody').style.display = 'none';
+                document.getElementById('adminPanel').style.display = 'block';
+            } else {
+                const el = document.getElementById('settingsError');
+                el.textContent = '密码错误';
+                el.style.display = 'block';
+            }
+        }
+        async function adminClearAll() {
+            const pwd1 = prompt('请输入密码确认删除：');
+            if (pwd1 !== '1314520') { alert('密码错误'); return; }
+            const pwd2 = prompt('请再次输入密码：');
+            if (pwd2 !== '1314520') { alert('密码不一致'); return; }
+            const resp = await fetch(`${WORKER_BASE_URL}/admin/clear`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: '1314520' }) });
+            const data = await resp.json().catch(() => ({}));
+            if (data && data.ok) {
+                alert('已清空排行榜');
+            } else {
+                alert('操作失败');
+            }
+        }
+        function toCsvRow(arr) { return arr.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(','); }
+        async function adminExportCSV() {
+            try {
+                const resp = await fetch(`${WORKER_BASE_URL}/leaderboard?limit=1000`);
+                const list = await resp.json();
+                const header = ['排名','工号','姓名','时间(ms)','步数','剩余次数'];
+                const rows = [header];
+                list.forEach((row, idx) => {
+                    const remaining = typeof row.attemptsCount === 'number' ? Math.max(0, 3 - row.attemptsCount) : '';
+                    rows.push([idx + 1, row.userId || '', row.nickname || '', row.timeMs || '', row.moves || '', remaining]);
+                });
+                const csv = rows.map(toCsvRow).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'leaderboard.csv'; a.click();
+                URL.revokeObjectURL(url);
+            } catch (e) { alert('导出失败'); }
+        }
+        async function adminEditUser() {
+            const userId = document.getElementById('admUserId').value.trim();
+            if (!userId) { alert('工号必填'); return; }
+            const payload = {
+                password: '1314520',
+                userId,
+                nickname: document.getElementById('admNickname').value.trim() || undefined,
+                timeMs: parseInt(document.getElementById('admTime').value, 10) || undefined,
+                moves: parseInt(document.getElementById('admMoves').value, 10) || undefined,
+                attemptsCount: parseInt(document.getElementById('admAttempts').value, 10)
+            };
+            const resp = await fetch(`${WORKER_BASE_URL}/admin/edit`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await resp.json().catch(() => ({}));
+            if (data && data.ok) { alert('已保存'); } else { alert('保存失败'); }
         }
 
         function showConfigModal() {
