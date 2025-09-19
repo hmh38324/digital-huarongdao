@@ -111,7 +111,15 @@ export default {
       const userId = url.searchParams.get("userId");
       if (!userId) return json({ error: "Missing userId" }, origin, 400);
       const raw = await env.CACHE.get(`attempts:${userId}`);
-      const attemptsCount = raw ? parseInt(raw, 10) : 0;
+      let attemptsCount = 0;
+      if (raw) {
+        try {
+          const obj = JSON.parse(raw as any);
+          attemptsCount = typeof obj.attemptsCount === "number" ? obj.attemptsCount : parseInt(String(obj.attemptsCount || 0), 10);
+        } catch {
+          attemptsCount = parseInt(raw, 10) || 0;
+        }
+      }
       return json({ attemptsCount }, origin);
     }
     // 开始一次尝试：增加 KV 计数并返回 attemptsCount
