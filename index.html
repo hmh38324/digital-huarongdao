@@ -337,14 +337,15 @@
         .leaderboard-buttons {
             position: sticky;
             bottom: 0;
-            background: #fff;
-            padding-top: 10px;
-            margin-top: 10px;
-            border-top: 1px solid #eee;
+            background: transparent; /* 透明背景，仅按钮可见 */
+            padding-top: 0;
+            margin-top: 0;
+            border-top: none;
             display: flex;
             justify-content: center;
             gap: 10px;
             z-index: 2;
+            pointer-events: none; /* 容器不拦截点击，按钮单独可点击 */
         }
 
         .leaderboard-item {
@@ -413,6 +414,8 @@
             background: linear-gradient(45deg, #667eea, #764ba2);
             color: white;
             transition: all 0.3s ease;
+            pointer-events: auto; /* 按钮仍可点击 */
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2); /* 浮在列表之上更清晰 */
         }
 
         .leaderboard-buttons button:hover {
