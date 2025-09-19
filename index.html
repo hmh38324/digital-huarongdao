@@ -333,31 +333,18 @@
             margin-bottom: 20px;
         }
 
-        /* 排行榜顶部吸附标题与关闭按钮 */
-        .leaderboard-header {
+        /* 排行榜底部吸附关闭按钮 */
+        .leaderboard-buttons {
             position: sticky;
-            top: 0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            bottom: 0;
             background: #fff;
-            padding-bottom: 10px;
-            margin-bottom: 10px;
+            padding-top: 10px;
+            margin-top: 10px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
             z-index: 2;
-            border-bottom: 1px solid #eee;
-        }
-        .leaderboard-close {
-            background: #f1f5f9;
-            color: #333;
-            border: none;
-            border-radius: 8px;
-            padding: 6px 10px;
-            cursor: pointer;
-            font-size: 14px;
-            line-height: 1;
-        }
-        .leaderboard-close:hover {
-            background: #e2e8f0;
         }
 
         .leaderboard-item {
@@ -643,10 +630,7 @@
     <!-- 排行榜弹窗 -->
     <div class="leaderboard-modal" id="leaderboardModal">
         <div class="leaderboard-content">
-            <div class="leaderboard-header">
-                <h2>🏆 排行榜</h2>
-                <button class="leaderboard-close" onclick="closeLeaderboard()">关闭</button>
-            </div>
+            <h2>🏆 排行榜</h2>
             <div class="leaderboard-list" id="leaderboardList">
                 <!-- 排行榜内容将通过JavaScript动态生成 -->
             </div>
