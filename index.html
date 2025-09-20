@@ -694,7 +694,7 @@
 
     <script>
         // Cloudflare Worker API 基础地址（部署后替换）
-        const WORKER_BASE_URL = 'https://hl-worker.hmh38324.workers.dev';
+        const WORKER_BASE_URL = 'https://huarongdaoapi.biboran.top';
         class PuzzleGame {
             constructor() {
                 this.pieces = [];
@@ -1077,9 +1077,9 @@
                 const leaderboardList = document.getElementById('leaderboardList');
                 leaderboardList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">🔄 正在加载最新数据...</p>';
                 
-                // 从 Worker 读取，强制刷新缓存
+                // 从 Worker 读取
                 try {
-                    const resp = await fetch(`${WORKER_BASE_URL}/leaderboard?limit=50&refresh=true`, { method: 'GET' });
+                    const resp = await fetch(`${WORKER_BASE_URL}/leaderboard?limit=50`, { method: 'GET' });
                     if (resp.ok) {
                         const list = await resp.json();
                         this.renderLeaderboardFromWorker(list);
@@ -1197,10 +1197,6 @@
                         el.textContent = String(Math.max(0, this.maxAttempts - data.attemptsCount));
                     }
                     this.currentAttemptId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-                    
-                    // 清除排行榜缓存，确保新用户信息能立即显示
-                    this.clearLeaderboardCache();
-                    
                     return true;
                 } catch (e) {
                     console.warn('调用 /begin 失败', e);
@@ -1238,20 +1234,6 @@
                     const used = node && node.attemptsCount ? node.attemptsCount : 0;
                     el.textContent = String(Math.max(0, this.maxAttempts - used));
                 } catch (_) {}
-            }
-
-            // 清除排行榜缓存的方法
-            async clearLeaderboardCache() {
-                try {
-                    // 通过发送一个带refresh参数的请求来清除缓存
-                    await fetch(`${WORKER_BASE_URL}/leaderboard?limit=50&refresh=true`, { 
-                        method: 'GET' 
-                    }).catch(() => {
-                        // 忽略错误，这只是为了清除缓存
-                    });
-                } catch (e) {
-                    console.warn('清除缓存失败:', e);
-                }
             }
 
             // 计时相关方法

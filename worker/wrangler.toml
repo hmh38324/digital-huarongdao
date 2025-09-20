@@ -15,6 +15,6 @@ id = "728c6d1b94e64ec694f51d08c5361ff6"
 
 [vars]
 # 允许的前端域名（逗号分隔）
-ALLOWED_ORIGINS = "https://liqunhuarongdao.biboran.top,https://hmh38324.github.io"
+ALLOWED_ORIGINS = "https://liqunhuarongdao.biboran.top"
 
 

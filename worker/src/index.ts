@@ -37,17 +37,9 @@ export default {
 
     if (url.pathname === "/leaderboard" && req.method === "GET") {
       const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 100);
-      // 检查是否有强制刷新参数
-      const forceRefresh = url.searchParams.get("refresh") === "true";
-      
       // 不缓存 attemptsCount（需要实时），仅缓存 D1 排序结果
       const cacheKey = `leaderboard:top:${limit}:best_per_user:v2:d1`;
-      let cached = null;
-      
-      // 只有在非强制刷新时才使用缓存
-      if (!forceRefresh) {
-        cached = await env.CACHE.get(cacheKey, "json");
-      }
+      const cached = await env.CACHE.get(cacheKey, "json");
 
       // 每个用户仅保留最佳一条（步数升序、时间升序、时间早者优先）
       const { results: d1Rows } = await env.DB.prepare(
@@ -71,8 +63,7 @@ export default {
         .bind(limit)
         .all();
 
-      // 只有在没有缓存或强制刷新时才更新缓存
-      if (!cached || forceRefresh) {
+      if (!cached) {
         env.CACHE.put(cacheKey, JSON.stringify(d1Rows), { expirationTtl: 30 }).catch(() => {});
       }
 
@@ -155,11 +146,6 @@ export default {
       }
       attempts += 1;
       await env.CACHE.put(key, JSON.stringify({ attemptsCount: attempts, nickname }));
-      
-      // 清除排行榜缓存，确保新用户信息能立即显示
-      const cacheKey = `leaderboard:top:50:best_per_user:v2:d1`;
-      await env.CACHE.delete(cacheKey).catch(() => {});
-      
       return json({ ok: true, attemptsCount: attempts }, origin, 200);
     }
 
