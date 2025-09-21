@@ -651,7 +651,7 @@
         <p>你成功完成了拼图！</p>
         <p>总移动次数: <span id="finalMoves">0</span></p>
         <p>总用时: <span id="finalTime">00:00</span></p>
-        <button onclick="closeWinMessage()">再玩一次</button>
+        <button onclick="closeWinMessage()">关闭</button>
     </div>
 
     <!-- 登录弹窗 -->
@@ -1305,7 +1305,7 @@
         function closeWinMessage() {
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('winMessage').style.display = 'none';
-            game.shufflePuzzle();
+            // 不再自动打乱拼图，因为用户已经完成游戏
         }
 
         function showLoginModal() {
