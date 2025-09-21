@@ -406,6 +406,9 @@
         <h1>🧩 数字华容道</h1>
         <div class="game-info">
             <p>点击图片块来移动它们，将图片拼回原样！</p>
+            <p style="color: #e74c3c; font-size: 14px; margin-top: 10px;">
+                ⚠️ 每日限制：每个用户每天只能玩一次游戏，明天00:00后可以重新开始
+            </p>
         </div>
         
         <div class="user-info" id="userInfo">
@@ -414,7 +417,6 @@
         
         <div class="controls">
             <button onclick="shufflePuzzle()">🔀 打乱</button>
-            <button onclick="resetPuzzle()">🔄 重置</button>
             <button onclick="showLoginModal()" id="loginBtn">🔐 登录</button>
             <button onclick="logout()" id="logoutBtn" style="display:none">🚪 登出</button>
         </div>
@@ -471,6 +473,151 @@
     </div>
 
     <script>
+        // 每日限制管理器
+        class DailyLimitManager {
+            constructor() {
+                this.gameId = 'game1'; // 当前游戏ID
+                this.storageKey = 'daily_limit_data';
+            }
+
+            // 获取中国时区的今天日期
+            getChinaToday() {
+                const now = new Date();
+                const chinaTime = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Shanghai',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }).format(now);
+                return chinaTime; // 格式: YYYY-MM-DD
+            }
+
+            // 获取用户唯一标识
+            getUserKey(employeeId, employeeName) {
+                return `${employeeId}_${employeeName}`;
+            }
+
+            // 从localStorage获取数据
+            getData() {
+                try {
+                    const data = localStorage.getItem(this.storageKey);
+                    return data ? JSON.parse(data) : { users: {} };
+                } catch (error) {
+                    console.error('获取本地数据失败:', error);
+                    return { users: {} };
+                }
+            }
+
+            // 保存数据到localStorage
+            saveData(data) {
+                try {
+                    localStorage.setItem(this.storageKey, JSON.stringify(data));
+                    return true;
+                } catch (error) {
+                    console.error('保存本地数据失败:', error);
+                    return false;
+                }
+            }
+
+            // 检查用户今日是否已玩游戏
+            checkDailyLimit(employeeId, employeeName) {
+                const userKey = this.getUserKey(employeeId, employeeName);
+                const today = this.getChinaToday();
+                
+                try {
+                    const data = this.getData();
+                    const user = data.users[userKey];
+                    
+                    if (user && user.lastPlayDate === today) {
+                        return {
+                            canPlay: false,
+                            reason: '今日已玩过游戏，请明天00:00后再试！',
+                            playedGames: user.games || {}
+                        };
+                    }
+                    
+                    return { canPlay: true };
+                } catch (error) {
+                    console.error('检查每日限制失败:', error);
+                    // 出错时允许游戏，避免影响用户体验
+                    return { canPlay: true };
+                }
+            }
+
+            // 记录用户今日游戏
+            recordGamePlay(employeeId, employeeName) {
+                const userKey = this.getUserKey(employeeId, employeeName);
+                const today = this.getChinaToday();
+                
+                try {
+                    const data = this.getData();
+                    
+                    if (!data.users[userKey]) {
+                        data.users[userKey] = {
+                            lastPlayDate: today,
+                            games: {}
+                        };
+                    }
+                    
+                    // 更新最后游戏日期和当前游戏记录
+                    data.users[userKey].lastPlayDate = today;
+                    data.users[userKey].games[this.gameId] = true;
+                    
+                    // 保存数据
+                    const success = this.saveData(data);
+                    
+                    // 同时通过URL参数通知其他游戏
+                    this.notifyOtherGames(employeeId, employeeName, today);
+                    
+                    return success;
+                } catch (error) {
+                    console.error('记录游戏失败:', error);
+                    return false;
+                }
+            }
+
+            // 通过URL参数通知其他游戏（跨游戏限制）
+            notifyOtherGames(employeeId, employeeName, today) {
+                // 创建一个隐藏的iframe来通知其他游戏
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = `https://hmh38324.github.io/game1/?notify=played&user=${encodeURIComponent(employeeId + '_' + employeeName)}&date=${today}&game=${this.gameId}`;
+                document.body.appendChild(iframe);
+                
+                // 清理iframe
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                }, 1000);
+            }
+
+            // 初始化时检查URL参数
+            init() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const notify = urlParams.get('notify');
+                const user = urlParams.get('user');
+                const date = urlParams.get('date');
+                const game = urlParams.get('game');
+                
+                if (notify === 'played' && user && date && game) {
+                    // 更新本地数据
+                    const data = this.getData();
+                    if (!data.users[user]) {
+                        data.users[user] = {
+                            lastPlayDate: date,
+                            games: {}
+                        };
+                    }
+                    data.users[user].lastPlayDate = date;
+                    data.users[user].games[game] = true;
+                    this.saveData(data);
+                    
+                    // 清理URL参数
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, document.title, newUrl);
+                }
+            }
+        }
+
         class PuzzleGame {
             constructor() {
                 this.pieces = [];
@@ -480,6 +627,7 @@
                 this.isLoggedIn = false;
                 this.currentUser = null;
                 this.peopleData = null;
+                this.dailyLimitManager = new DailyLimitManager();
                 this.pieceImages = [
                     'split_images/liqun_part_1_1.png',
                     'split_images/liqun_part_1_2.png',
@@ -516,6 +664,8 @@
                 this.createPuzzle();
                 this.renderPuzzle();
                 this.updateUserInfo();
+                // 初始化每日限制管理器
+                this.dailyLimitManager.init();
                 // 首次进入游戏时自动打乱
                 setTimeout(() => {
                     this.shufflePuzzle();
@@ -560,6 +710,19 @@
                 if (!this.isLoggedIn) {
                     alert('请先登录才能开始游戏！');
                     return;
+                }
+                
+                // 检查每日限制
+                if (this.isLoggedIn && this.currentUser) {
+                    const limitCheck = this.dailyLimitManager.checkDailyLimit(
+                        this.currentUser.工号, 
+                        this.currentUser.姓名
+                    );
+                    
+                    if (!limitCheck.canPlay) {
+                        alert(limitCheck.reason);
+                        return;
+                    }
                 }
                 
                 const emptyIndex = this.pieceImages.indexOf(null);
@@ -705,6 +868,15 @@
                 
                 if (isCorrect) {
                     this.isGameWon = true;
+                    
+                    // 记录用户今日已玩游戏
+                    if (this.isLoggedIn && this.currentUser) {
+                        this.dailyLimitManager.recordGamePlay(
+                            this.currentUser.工号, 
+                            this.currentUser.姓名
+                        );
+                    }
+                    
                     // 停顿两秒后再显示成功提醒
                     setTimeout(() => {
                         this.showWinMessage();
@@ -793,9 +965,6 @@
             game.shufflePuzzle();
         }
 
-        function resetPuzzle() {
-            game.resetPuzzle();
-        }
 
         function closeWinMessage() {
             document.getElementById('overlay').style.display = 'none';
