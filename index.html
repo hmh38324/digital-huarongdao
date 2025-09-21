@@ -1189,7 +1189,11 @@
                     });
                     const data = await resp.json().catch(() => ({}));
                     if (!resp.ok || !data.ok) {
-                        alert('本用户可用次数已用完（最多3次）。');
+                        if (data.reason === 'daily_limit') {
+                            alert('今日已玩过游戏，请明天00:00后再试！');
+                        } else {
+                            alert('本用户可用次数已用完（最多3次）。');
+                        }
                         return false;
                     }
                     const el = document.getElementById('remainingAttempts');
