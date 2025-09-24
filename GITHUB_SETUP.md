@@ -6,7 +6,7 @@
 1. 访问：https://github.com/new
 2. 填写仓库信息：
    - **Repository name**: `digital-huarongdao`
-   - **Description**: `数字华容道拼图游戏 - 基于图片的九宫格拼图游戏`
+   - **Description**: `完美拼图游戏 - 基于图片的九宫格拼图游戏`
    - **Visibility**: 选择 Public（公开）或 Private（私有）
    - **不要勾选** "Add a README file"（我们已经有了）
    - **不要勾选** "Add .gitignore"
@@ -32,7 +32,7 @@ git push -u origin main
 
 ## 📁 项目文件说明
 
-- `puzzle_game.html` - 主游戏文件（数字华容道）
+- `puzzle_game.html` - 主游戏文件（完美拼图）
 - `split_image.py` - 图片分割脚本
 - `README.md` - 项目说明文档
 - `origin.png` - 参考图片
